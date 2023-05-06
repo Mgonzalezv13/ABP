@@ -25,14 +25,18 @@ x[1]    = 0
 y[1]    = 0
 φ[1]    = 0
 Δt[1]   = 0
-for i in 1:n_trayectorias-1
-        x[i+1] = x[i] .+ v*cos(φ[i])*dt .+ sqrt(2*Dt*Dr*dt)*randn()
-        y[i+1] = y[i] .+ v*sin(φ[i])*dt .+ sqrt(2*Dt*Dr*dt)*randn()
-        φ[i+1] = φ[i] .+ Ω*dt .+ sqrt(2*Dt*Dr*dt)*randn()
-        Δt[i+1]  =+ Δt[i] .+ dt
-        msd[i+1] =(x[i] .- x[1]).^2 + (y[i] .- y[1]).^2
-end
 
+for j in 1:n_particulas
+    for i in 1:n_trayectorias-1
+            x[i+1] = x[i] .+ v*cos(φ[i])*dt .+ sqrt(2*Dt*Dr*dt)*randn()
+            y[i+1] = y[i] .+ v*sin(φ[i])*dt .+ sqrt(2*Dt*Dr*dt)*randn()
+            φ[i+1] = φ[i] .+ Ω*dt .+ sqrt(2*Dt*Dr*dt)*randn()
+            Δt[i+1]  =+ Δt[i] .+ dt
+            msd[i+1] =(x[i] .- x[1]).^2 + (y[i] .- y[1]).^2
+    end
+    plot(Δt,msd, yaxis=log)
+    savefig("msd$j.svg")
+end
 
 
 
