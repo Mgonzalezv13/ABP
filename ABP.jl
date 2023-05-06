@@ -35,7 +35,7 @@ for j in 1:n_particulas
             msd[i+1] =(x[i] .- x[1]).^2 + (y[i] .- y[1]).^2
     end
     plot(Δt,msd, yaxis=log)
-    savefig("msd$j.svg")
+    savefig("msd$j.png")
 end
 
 
