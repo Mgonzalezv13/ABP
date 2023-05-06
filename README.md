@@ -1,7 +1,7 @@
 # ABP
 
 
-# Simulación de particula browniana activa 
+# Simulación de partcula browniana activa 
 
 
 Este repositorio corresponde al trabajo realizado para la asignatura de Topicos I, la cual es un ramo guiado para optar el grado de Físico(a) en la carrera
