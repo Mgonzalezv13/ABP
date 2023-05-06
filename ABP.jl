@@ -1,6 +1,7 @@
-using Distributions, LinearAlgebra, GLM, DataFrames, Printf, CSV
-using Plots, Plots.PlotMeasures, StatsPlots
-import Random
+using Random, Serialization, Plots
+
+
+
 
 
 #aca se define el numero de componentes en la direccion x e y
@@ -15,7 +16,8 @@ Dr = 0.16
 Ω  = 0.0
 dt = 10e-3
 
-#Aca se definen vectores "vacios
+#Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula ademas del msd y el paso temporal
+
 x   = zeros(n_trayectorias)
 y   = similar(x)
 φ   = similar(x)
@@ -25,12 +27,15 @@ x[1]    = 0
 y[1]    = 0
 φ[1]    = 0
 Δt[1]   = 0
+sqrtD    = sqrt(2*Dt*Dr*dt) #esto corresponde a √(2Dt*Dr*dt)
 
 for j in 1:n_particulas
+
     for i in 1:n_trayectorias-1
-            x[i+1] = x[i] .+ v*cos(φ[i])*dt .+ sqrt(2*Dt*Dr*dt)*randn()
-            y[i+1] = y[i] .+ v*sin(φ[i])*dt .+ sqrt(2*Dt*Dr*dt)*randn()
-            φ[i+1] = φ[i] .+ Ω*dt .+ sqrt(2*Dt*Dr*dt)*randn()
+            ruido  = sqrtD*randn() 
+            x[i+1] = x[i] .+ v*cos(φ[i])*dt .+ ruido
+            y[i+1] = y[i] .+ v*sin(φ[i])*dt .+  ruido
+            φ[i+1] = φ[i] .+ Ω*dt .+  ruido 
             Δt[i+1]  =+ Δt[i] .+ dt
             msd[i+1] =(x[i] .- x[1]).^2 + (y[i] .- y[1]).^2
     end
@@ -38,11 +43,7 @@ for j in 1:n_particulas
     savefig("msd$j.png")
 end
 
-
-
-
-
-
+ 
 
 
 
