@@ -1,20 +1,29 @@
 using DelimitedFiles, Plots
 
+n_trayectorias=1000000
+n_particulas=500
+dt = 10e-3
+msd_sum = zeros(n_trayectorias)
+Δt      = similar(msd_sum)
+Δt[1]   = dt
 
-function msd_mean(n_trayectorias,n_particulas)
+
+for i in 1:n_trayectorias-1
     
-    msd_sum[1] = readdlm("msd_1.dat")
+    Δt[i+1] = Δt[i] .+ dt
+    
+end
 
-    for i in 1:n_particulas
-        msd = readdlm("msd_$i.dat")
+for i in 1:n_particulas
+    
+    msd = readdlm("msd_$i.dat")
 
-        for j in 1:n_trayectorias
-            msd_sum[j] += msd[j]
-        end
-
+    for j in 1:n_trayectorias-1
+        msd_sum[j] += msd[j]
     end
-        
-    msd_mean = msd_sum ./ n_particulas  # Divide by n_particulas to get the mean MSD
-    plot(Δt,msd_mean, yaxis=log)
 
 end
+        
+    msd_mean = msd_sum ./ n_particulas  # Divide by n_particulas to get the mean MSD
+    plot(Δt,msd_mean,xaxis=log, yaxis=log)
+

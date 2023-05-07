@@ -22,19 +22,16 @@ for j in 1:n_particulas
     x   = zeros(n_trayectorias)
     y   = similar(x)
     φ   = similar(x)
-    Δt  = zeros(n_trayectorias)
     msd = similar(Δt)
     x[1]    = 0
     y[1]    = 0
     φ[1]    = 0
-    Δt[1]   = dt
     msd[1000000] = (x[1000000] .- x[1]).^2 + (y[1000000] .- y[1]).^2
     for i in 1:n_trayectorias-1
         ruido  = sqrtD*randn() 
         x[i+1] = x[i] .+ v*cos(φ[i])*dt .+ ruido
         y[i+1] = y[i] .+ v*sin(φ[i])*dt .+  ruido
         φ[i+1] = φ[i] .+ Ω*dt .+  ruido 
-        Δt[i+1]  = Δt[i] .+ dt
         msd[i] =(x[i+1] .- x[1]).^2 + (y[i+1] .- y[1]).^2
     end
 
