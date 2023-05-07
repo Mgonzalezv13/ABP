@@ -4,7 +4,7 @@ folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
 n_trayectorias = 1000000
-n_particulas = 10
+n_particulas = 500
 
 #Aca se definen las constantes 
 L  = 40
@@ -27,26 +27,22 @@ for j in 1:n_particulas
     x[1]    = 0
     y[1]    = 0
     φ[1]    = 0
-    Δt[1]   = 0
-
+    Δt[1]   = dt
+    msd[1000000] = (x[1000000] .- x[1]).^2 + (y[1000000] .- y[1]).^2
     for i in 1:n_trayectorias-1
         ruido  = sqrtD*randn() 
         x[i+1] = x[i] .+ v*cos(φ[i])*dt .+ ruido
         y[i+1] = y[i] .+ v*sin(φ[i])*dt .+  ruido
         φ[i+1] = φ[i] .+ Ω*dt .+  ruido 
-        Δt[i+1]  =+ Δt[i] .+ dt
-        msd[i+1] =(x[i+1] .- x[1]).^2 + (y[i+1] .- y[1]).^2
+        Δt[i+1]  = Δt[i] .+ dt
+        msd[i] =(x[i+1] .- x[1]).^2 + (y[i+1] .- y[1]).^2
     end
 
-    # Save the trajectory to file
+    #Guarda la posicion en "traj$j_dat" y guarda el msd en "msd$j_dat" de cada particula con j el numero de la particula 
     file_path = joinpath(folder_path, "traj_$j.dat")
     writedlm(file_path, [x y])
     file_path = joinpath(folder_path, "msd_$j.dat")
     writedlm(file_path, msd)
-
-    # Plot the MSD and save the figure
-    plot(Δt, msd, yaxis=log)
-    savefig(joinpath(folder_path, "msd$j.png"))
 end
 
 
