@@ -1,29 +1,21 @@
 using DelimitedFiles, Plots
 
-n_trayectorias=1000000
-n_particulas=500
+folder_path = "/home/mayron/ABP/"
+
+n_trayectorias = 1000000
+n_particulas = 500
 dt = 10e-3
+
 msd_sum = zeros(n_trayectorias)
-Δt      = similar(msd_sum)
-Δt[1]   = dt
-
-
-for i in 1:n_trayectorias-1
-    
-    Δt[i+1] = Δt[i] .+ dt
-    
-end
+deltat  = dt*(1:n_trayectorias)
+Δt      = collect(deltat)
 
 for i in 1:n_particulas
-    
-    msd = readdlm("msd_$i.dat")
+    msd = readdlm("/home/mayron/ABP/msd_$i.dat")
 
-    for j in 1:n_trayectorias-1
-        msd_sum[j] += msd[j]
-    end
-
+    @. msd_sum += msd  # Use broadcasting for vectorized addition
 end
-        
-    msd_mean = msd_sum ./ n_particulas  # Divide by n_particulas to get the mean MSD
-    plot(Δt,msd_mean,xaxis=log, yaxis=log)
 
+msd_mean = msd_sum / n_particulas
+plot(collect(Δt), msd_mean, xaxis=log, yaxis=log)
+savefig
