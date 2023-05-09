@@ -15,7 +15,5 @@ for i in 1:n_particulas
 
     @. msd_sum += msd  # Use broadcasting for vectorized addition
 end
-
 msd_mean = msd_sum / n_particulas
-plot(collect(Δt), msd_mean, xaxis=log, yaxis=log)
-savefig
+plot(Δt, msd_mean, xaxis=log, yaxis=log)
