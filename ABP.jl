@@ -4,7 +4,7 @@ folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
 n_trayectorias = 1000 #se bajo el numero de pasos temporales, debido a que con muchos colapsaba el grafico
-n_particulas = 50
+n_particulas = 30
 
 #Aca se definen las constantes 
 # Define box parameters
