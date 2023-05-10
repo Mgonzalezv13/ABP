@@ -8,7 +8,7 @@ n_particulas = 500
 
 #Aca se definen las constantes 
 L  = 40
-v  = 10.0
+v  = 0.0
 Dt = 0.22
 Dr = 0.16
 Ω  = 0.0
@@ -23,8 +23,8 @@ for j in 1:n_particulas
     y   = similar(x)
     φ   = similar(x)
     msd = similar(x)
-    x[1]    = 0
-    y[1]    = 0
+    x[1]    = 0.25*randn()
+    y[1]    = 0.3*randn()
     φ[1]    = 0
     for i in 1:n_trayectorias-1
         ruido  = sqrtD*randn() 
