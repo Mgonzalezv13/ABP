@@ -42,13 +42,13 @@ sqrtT = sqrt(2*Dt*dt)
             dy = y[i+1] - centro_y
             angulo = atan(dy, dx)
 
-            # Adjust angle to be within the range of -pi to pi
+            # Se ajuta el angulo entre -pi y pi
             angulo = angulo % (2*pi)
             if angulo > pi
                 angulo -= 2*pi
             end
 
-            # Check if the particle is within the gap region
+            # ver si la particula esta dentro de la zona del gap
             if angulo >= inicio_gap && angulo <= fin_gap
                 continue  # Skip reflection if the particle is within the gap region
             end
@@ -56,11 +56,11 @@ sqrtT = sqrt(2*Dt*dt)
             distancia = sqrt(dx^2 + dy^2)
                 
             if distancia > radio
-                    # Reflect the particle off the circular wall
-                    normal_x = dx / distancia  # x-component of outward normal vector
-                    normal_y = dy / distancia  # y-component of outward normal vector
+                    # Reflexion de la particula en la barrera
+                    normal_x = dx / distancia  # componente x del vector normal
+                    normal_y = dy / distancia  # componente y del vector normal
                     
-                    # Reflect the particle's position
+                    # Actualizacion de la posicion despues de la reflexion
                     reflejo_x = centro_x + normal_x * radio
                     reflejo_y = centro_y + normal_y * radio
                     delta_x = reflejo_x - x[i+1]
@@ -68,7 +68,7 @@ sqrtT = sqrt(2*Dt*dt)
                     x[i+1] = reflejo_x + delta_x
                     y[i+1] = reflejo_y + delta_y
                     
-                    # Reflect the angle
+                    # Angulo de reflexion
                     angle = atan(delta_y, delta_x)
                     φ[i+1] = angulo + pi + (angulo - φ[i])
             end
@@ -82,6 +82,7 @@ sqrtT = sqrt(2*Dt*dt)
     circ_x = centro_x .+ radio * cos.(theta)
     circ_y = centro_y .+ radio * sin.(theta)
     plot!(circ_x, circ_y, fillrange = 0, fillalpha = 0.3, color = :gray, aspect_ratio = :equal, legend =false)
+    #Borrar una parte de relleno para identificar visualmente el gap
     theta = LinRange(inicio_gap, fin_gap, 100)
     gap_x = centro_x .+ radio * cos.(theta)
     gap_y = centro_y .+ radio * sin.(theta)
