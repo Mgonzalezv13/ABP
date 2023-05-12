@@ -3,8 +3,8 @@ using Random, Serialization, Plots, DelimitedFiles
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
-n_trayectorias = 100000 #se bajo el numero de pasos temporales, debido a que con muchos colapsaba el grafico
-n_particulas = 5
+n_trayectorias = 10000 #se bajo el numero de pasos temporales, debido a que con muchos colapsaba el grafico
+n_particulas = 50
 
 L = 200  #diametro del circulo
 centro_x = 0  # centro del circulo en x
@@ -13,13 +13,13 @@ radio = L/2  # radio del circulo
 inicio_gap = 0  # inicio del agujero en la  barrera circular (en radianes)
 fin_gap = pi/10 # fin del agujero en la barrera circular (en radianes)
 
-v  = 5.5
-Dt = 0.08
-Dr = 0.16
-Ω  = 0.0
-dt = 10e-3
-sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2Dt*Dr*dt)
-sqrtT = sqrt(2*Dt*dt)
+v  = 5.5    #velocidad activa de la particula
+Dt = 0.08   #Difusion Traslacional
+Dr = 0.16   #Difusion Rotacional
+Ω  = 0.0    #Constante de quiralidad   
+dt = 10e-3  #Paso temporal
+sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
+sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 
 
  for j in 1:n_particulas
@@ -42,7 +42,7 @@ sqrtT = sqrt(2*Dt*dt)
             dy = y[i+1] - centro_y
             angulo = atan(dy, dx)
 
-            # Se ajuta el angulo entre -pi y pi
+            # Se ajusta el angulo entre -pi y pi
             angulo = angulo % (2*pi)
             if angulo > pi
                 angulo -= 2*pi
@@ -86,10 +86,10 @@ sqrtT = sqrt(2*Dt*dt)
     theta = LinRange(inicio_gap, fin_gap, 100)
     gap_x = centro_x .+ radio * cos.(theta)
     gap_y = centro_y .+ radio * sin.(theta)
-    plot!(gap_x, gap_y, color = :white, aspect_ratio = :equal, linewidth= 15, legend =false)
+    plot!(gap_x, gap_y, color = :red, aspect_ratio = :equal, linewidth= 15, legend =false)
     #ploteo de la trayectoria de la particula
     scatter!(x,y, markersize=0.2, legend=false)
-    savefig("traj_$j.pdf")
+    savefig("traj_$j.svg")
 end
 
 
