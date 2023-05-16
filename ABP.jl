@@ -3,8 +3,8 @@ using Random, Serialization, Plots, DelimitedFiles
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
-n_trayectorias = 10000 #se bajo el numero de pasos temporales, debido a que con muchos colapsaba el grafico
-n_particulas = 50
+n_trayectorias = 100000 #se bajo el numero de pasos temporales, debido a que con muchos colapsaba el grafico
+n_particulas = 100
 
 L = 200  #diametro del circulo
 centro_x = 0  # centro del circulo en x
@@ -78,18 +78,18 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
     file_path = joinpath(folder_path, "traj_$j.dat")
     writedlm(file_path, [x y])
     # rellenar la zona exterior a la barrera, por contraste
-    theta = LinRange(0, 2π, 100)
-    circ_x = centro_x .+ radio * cos.(theta)
-    circ_y = centro_y .+ radio * sin.(theta)
-    plot!(circ_x, circ_y, fillrange = 0, fillalpha = 0.3, color = :gray, aspect_ratio = :equal, legend =false)
+    #theta = LinRange(0, 2π, 100)
+    #circ_x = centro_x .+ radio * cos.(theta)
+    #circ_y = centro_y .+ radio * sin.(theta)
+    #plot(circ_x, circ_y, fillrange = 0, fillalpha = 0.3, color = :gray, aspect_ratio = :equal, legend =false)
     #Borrar una parte de relleno para identificar visualmente el gap
-    theta = LinRange(inicio_gap, fin_gap, 100)
-    gap_x = centro_x .+ radio * cos.(theta)
-    gap_y = centro_y .+ radio * sin.(theta)
-    plot!(gap_x, gap_y, color = :red, aspect_ratio = :equal, linewidth= 15, legend =false)
+    #theta = LinRange(inicio_gap, fin_gap, 100)
+    #gap_x = centro_x .+ radio * cos.(theta)
+    #gap_y = centro_y .+ radio * sin.(theta)
+    #plot(gap_x, gap_y, color = :red, aspect_ratio = :equal, linewidth= 15, legend =false)
     #ploteo de la trayectoria de la particula
-    scatter!(x,y, markersize=0.2, legend=false)
-    savefig("traj_$j.svg")
+    #scatter(x,y, markersize=0.2, legend=false)
+    #savefig("traj_$j.svg")
 end
 
 
