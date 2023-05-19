@@ -21,6 +21,7 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
         x   = zeros(n_trayectorias)
         y   = similar(x)
         φ   = similar(x)
+        msd = similar(x)
         x[1]    = 0
         y[1]    = 0
         φ[1]    = 0
@@ -38,11 +39,15 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
             
             y[i+1] = y[i] .+ v*sin(φ[i])*dt .+  ruidoDty
 
+         # Se calcula el msd para cada particula
+            msd[i+1] = (x[i+1] - x[1])^2 + (y[i+1] - y[1])^2
         end
 
     #Guarda la posicion en "traj$j_dat" y guarda el msd en "msd$j_dat" de cada particula con j el numero de la particula 
     file_path = joinpath(folder_path, "traj_$j.dat")
     writedlm(file_path, [x y])
+    file_path = joinpath(folder_path, "msd_$j.dat")
+    writedlm(file_path, msd)
 end
 
 
