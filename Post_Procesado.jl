@@ -3,7 +3,7 @@ using DelimitedFiles, Plots
 folder_path = "/home/mayron/ABP/"
 
 n_trayectorias = 10000
-n_particulas = 100
+n_particulas = 50
 dt = 10e-3
 
 # Define the circular barrier parameters

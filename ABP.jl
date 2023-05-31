@@ -4,7 +4,7 @@ folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
 n_trayectorias = 10000 #se bajo el numero de pasos temporales, debido a que con muchos colapsaba el grafico
-n_particulas = 100
+n_particulas = 50
 
 L = 200  #diametro del circulo
 centro_x = 0  # centro del circulo en x
@@ -13,7 +13,7 @@ radio = L/2  # radio del circulo
 inicio_gap = 0  # inicio del agujero en la  barrera circular (en radianes)
 fin_gap = 0 # fin del agujero en la barrera circular (en radianes)
 
-v  = 0    #velocidad activa de la particula
+v  = 10    #velocidad activa de la particula
 Dt = 0.22   #Difusion Traslacional
 Dr = 0.16   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
@@ -49,13 +49,13 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
             dy = y[i+1] - centro_y
             angulo = atan(dy, dx)
 
-             Se ajusta el angulo entre -pi y pi
+            # Se ajusta el angulo entre -pi y pi
             angulo = angulo % (2*pi)
             if angulo > pi
                 angulo -= 2*pi
             end
 
-             ver si la particula esta dentro de la zona del gap
+            # ver si la particula esta dentro de la zona del gap
             if angulo >= inicio_gap && angulo <= fin_gap
                 continue  # Skip reflection if the particle is within the gap region
             end
