@@ -48,11 +48,3 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
             writedlm(file_path, msd)
         end
 end
-
-
-
-
-
-
-
-
