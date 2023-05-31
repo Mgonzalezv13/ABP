@@ -11,7 +11,7 @@ dt = 10e-3  #Paso temporal
 sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 
- function posicion(v, n_pasos, n_particulas)
+ function posicion(v,Ω, n_pasos, n_particulas)
     folder_path = "/home/mayron/Datos/datos_$v"
     mkdir(folder_path)
     @showprogress "Calculando las trayectorias..." for j in 1:n_particulas
@@ -48,11 +48,3 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
             writedlm(file_path, msd)
         end
 end
-
-
-
-
-
-
-
-
