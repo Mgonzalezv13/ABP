@@ -1,19 +1,24 @@
-using DelimitedFiles, Plots
+using DelimitedFiles, Plots, ProgressMeter, Statistics
 
-folder_path = "/home/mayron/ABP/"
+folder_path = "/home/mayron/Datos/datos_1"
 
-n_trayectorias = 1000000
-n_particulas = 500
+
 dt = 10e-3
 
-msd_sum = zeros(n_trayectorias)
-deltat  = dt*(1:n_trayectorias)
-Δt      = collect(deltat)
+function msd_prom(v,n_pasos,n_particulas)
+    
+    msd_sum = zeros(n_pasos,n_particulas)
+    Δt = range(dt, length=n_pasos, step=dt)
+            
 
-for i in 1:n_particulas
-    msd = readdlm("/home/mayron/ABP/msd_$i.dat")
+    @showprogress "Calculando..." for i in 1:n_particulas
+        msd = readdlm("/home/mayron/Datos/datos_$v/msd_$i.dat")
+        msd_sum[:,i] = msd
+    end
 
-    @. msd_sum += msd  # Use broadcasting for vectorized addition
+    msd_promedio = mean(msd_sum, dims=2)
+    writedlm("/home/mayron/Datos/datos_$v/msd_promedio$v.csv", msd_promedio, ',')
+
+    plot(Δt, msd_promedio, xaxis=:log, yaxis=:log, xlim=(0.01,1000), ylim=(0.01,10000), size=(2000,8000))
+        
 end
-msd_mean = msd_sum / n_particulas
-plot(Δt, msd_mean, xaxis=log, yaxis=log)
