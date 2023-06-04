@@ -7,7 +7,7 @@ n_particulas = 50
 dt = 10e-3
 
 # Define the circular barrier parameters
-L = 200
+L = 40
 centro_x = 0
 centro_y = 0
 radio = L/2
