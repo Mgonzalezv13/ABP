@@ -6,7 +6,7 @@ using Random, DelimitedFiles, Distributions, ProgressMeter
 Dt = 0.22   #Difusion Traslacional
 Dr = 0.16   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
-dt = 10e-3  #Paso temporal
+dt = 10^-3  #Paso temporal
 
 sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
@@ -42,8 +42,8 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
                         msd[1]  = ( x[2]- x[1] )^2 + ( y[2] - y[1] )^2
 
             #Guarda la posicion en "traj$j_dat" y guarda el msd en "msd$j_dat" de cada particula con j el numero de la particula 
-            file_path = joinpath(folder_path, "traj_$j.dat")
-            writedlm(file_path, [x y])
+           # file_path = joinpath(folder_path, "traj_$j.dat")
+           # writedlm(file_path, [x y])
             file_path = joinpath(folder_path, "msd_$j.dat")
             writedlm(file_path, msd)
         end
