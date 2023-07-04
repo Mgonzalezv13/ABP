@@ -1,4 +1,4 @@
-using Random, Plots, DelimitedFiles, ProgressMeter
+using Random, Plots, DelimitedFiles, ProgressMeter, Distributions
 
 folder_path = "/home/mayron/ABP"
 
@@ -16,7 +16,7 @@ Dr = 0.16   #Difusion Rotacional
 dt = 10^-3  #Paso temporal
 sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
-
+uniform_dist = Uniform(0, 2π)
 
 function barrera(v,Ω, n_pasos, n_particulas)
     pos_x = zeros(n_pasos,n_particulas)
@@ -26,9 +26,9 @@ function barrera(v,Ω, n_pasos, n_particulas)
             x   = zeros(n_pasos)
             y   = similar(x)
             φ   = similar(x)
-            x[1] = 0
-            y[1] = 0
-            φ[1] = 0
+            x[1] = rand
+            y[1] = rand
+            φ[1] = rand(uniform_dist)
             for i in 1:n_pasos-1
                 
                 ruidoDtx  = sqrtD*randn()
@@ -46,32 +46,45 @@ function barrera(v,Ω, n_pasos, n_particulas)
                 # Angulo de la particula con respecto al centro del circulo
                 dx = x[i+1] - centro_x
                 dy = y[i+1] - centro_y
-               
-    
-                # Mientras la particula este dentro del circulo y fuera del angulo del gap
-                distancia = sqrt(dx^2 + dy^2)
-                    
-                if distancia >= radio
-                        # Reflexion de la particula en la barrera
-                        normal_x = dx / distancia  # componente x del vector normal
-                        normal_y = dy / distancia  # componente y del vector normal
-                        
-                        # Actualizacion de la posicion despues de la reflexion
-                        reflejo_x = centro_x + normal_x * radio
-                        reflejo_y = centro_y + normal_y * radio
-                        delta_x = reflejo_x - x[i+1]
-                        delta_y = reflejo_y - y[i+1]
-                        x[i+1] = reflejo_x + delta_x
-                        y[i+1] = reflejo_y + delta_y
-                        
-                        # Angulo de reflexion
-                        angulo = atan(delta_y, delta_x)
-                        φ[i+1] = angulo + pi + (angulo - φ[i+1])
+                angulo = atan(dy, dx)
+
+                # Se ajusta el angulo entre -pi y pi
+                angulo = angulo % (2*pi)
+                if angulo > pi
+                    angulo -= 2*pi
                 end
-                pos_x[:,j] = x
-                pos_y[:,j] = y
-            end
+
+                 # Check if the particle is outside the circular boundary
+                distance = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
+                if distance >= radio
+                    # Reflect the particle at the boundary
+                    normal_x = (x[i+1] - centro_x) / distance
+                    normal_y = (y[i+1] - centro_y) / distance
+                    
+                    # Calculate the dot product of velocity and normal vector
+                    dot_product = (v * cos(φ[i]) * normal_x) + (v * sin(φ[i]) * normal_y)
+                    
+                    # Calculate the reflected direction
+                    reflect_x = 2 * dot_product * normal_x - cos(φ[i])
+                    reflect_y = 2 * dot_product * normal_y - sin(φ[i])
+                    
+                    # Normalize the reflected direction
+                    reflect_norm = sqrt(reflect_x^2 + reflect_y^2)
+                    reflect_x /= reflect_norm
+                    reflect_y /= reflect_norm
+                    
+                    # Update the position after reflection
+                    x[i+1] = centro_x + reflect_x * radio
+                    y[i+1] = centro_y + reflect_y * radio
+                    
+                    # Calculate the new angle
+                    φ[i+1] = atan(reflect_y, reflect_x)
+                end
             
+            pos_x[:,j] = x
+            pos_y[:,j] = y
+            end
+                
 
     end
     writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",pos_x , ',')
