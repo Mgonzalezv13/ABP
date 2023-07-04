@@ -26,8 +26,8 @@ function barrera(v,Ω, n_pasos, n_particulas)
             x   = zeros(n_pasos)
             y   = similar(x)
             φ   = similar(x)
-            x[1] = rand
-            y[1] = rand
+            x[1] = 0
+            y[1] = 0
             φ[1] = rand(uniform_dist)
             for i in 1:n_pasos-1
                 
@@ -54,19 +54,19 @@ function barrera(v,Ω, n_pasos, n_particulas)
                     angulo -= 2*pi
                 end
 
-                 # Check if the particle is outside the circular boundary
-                distance = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
-                if distance >= radio
-                    # Reflect the particle at the boundary
-                    normal_x = (x[i+1] - centro_x) / distance
-                    normal_y = (y[i+1] - centro_y) / distance
+                #Verificar si la particula esta fuera de la barrera
+                distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
+                if distancia >= radio
+                    # Reflejar la particula en la barrera
+                    normal_x = (x[i+1] - centro_x) / distancia
+                    normal_y = (y[i+1] - centro_y) / distancia
                     
-                    # Calculate the dot product of velocity and normal vector
-                    dot_product = (v * cos(φ[i]) * normal_x) + (v * sin(φ[i]) * normal_y)
+                    
+                    producto_punto = (v * cos(φ[i]) * normal_x) + (v * sin(φ[i]) * normal_y)
                     
                     # Calculate the reflected direction
-                    reflect_x = 2 * dot_product * normal_x - cos(φ[i])
-                    reflect_y = 2 * dot_product * normal_y - sin(φ[i])
+                    reflect_x = 2 * producto_punto * normal_x - cos(φ[i])
+                    reflect_y = 2 * producto_punto * normal_y - sin(φ[i])
                     
                     # Normalize the reflected direction
                     reflect_norm = sqrt(reflect_x^2 + reflect_y^2)
