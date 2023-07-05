@@ -1,4 +1,4 @@
-using Random, DelimitedFiles, Distributions, ProgressMeter
+using Random, DelimitedFiles, Distributions, ProgressMeter, Statistics
 
 
 
@@ -12,8 +12,7 @@ sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 
  function posicion(v,Ω, n_pasos, n_particulas)
-    folder_path = "/home/mayron/Datos/datos_$v"
-    mkdir(folder_path)
+    msd_total = zeros(n_pasos,n_particulas)
     @showprogress "Calculando las trayectorias..." for j in 1:n_particulas
             #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
                 x   = zeros(n_pasos)
@@ -40,11 +39,8 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
                             msd[i+1] = ( x[i+1]- x[1] )^2 + ( y[i+1] - y[1] )^2
                         end
                         msd[1]  = ( x[2]- x[1] )^2 + ( y[2] - y[1] )^2
-
-            #Guarda la posicion en "traj$j_dat" y guarda el msd en "msd$j_dat" de cada particula con j el numero de la particula 
-           # file_path = joinpath(folder_path, "traj_$j.dat")
-           # writedlm(file_path, [x y])
-            file_path = joinpath(folder_path, "msd_$j.dat")
-            writedlm(file_path, msd)
+                        msd_total[:,j] = msd
         end
+        msd_prom = mean(msd_total, dims=2)
+        writedlm("/home/mayron/Datos/datos2.0_$v/msd_00$v.csv",msd_prom, ',')
 end
