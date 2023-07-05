@@ -26,9 +26,11 @@ function barrera(v,Ω, n_pasos, n_particulas)
             x   = zeros(n_pasos)
             y   = similar(x)
             φ   = similar(x)
-            x[1] = 0
-            y[1] = 0
             φ[1] = rand(uniform_dist)
+            random = sqrt(rand())
+            rand_ang = randn()*2pi
+            x[1] = radio*random*cos(rand_ang)
+            y[1] = radio*random*sin(rand_ang)
             for i in 1:n_pasos-1
                 
                 ruidoDtx  = sqrtD*randn()
@@ -128,10 +130,38 @@ end
 
 
 
+function posicion(v,Ω, n_pasos, n_particulas)
+    pos_x = zeros(n_pasos,n_particulas)
+    pos_y = similar(pos_x)
+    @showprogress "Calculando trayectorias " for j in 1:n_particulas
+        #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
+            x   = zeros(n_pasos)
+            y   = similar(x)
+            φ   = similar(x)
+            x[1] = rand()
+            y[1] = rand()
+            φ[1] = rand(uniform_dist)
+            for i in 1:n_pasos-1
+                
+                ruidoDtx  = sqrtD*randn()
+                
+                ruidoDty  = sqrtD*randn() #Se definen ruidos diferentes para X e Y
+                
+                ruidoDr  = sqrtT*randn()
+                
+                φ[i+1] = φ[i] + Ω*dt +  ruidoDr
+                
+                x[i+1] = x[i] + v*cos(φ[i])*dt + ruidoDtx
+                
+                y[i+1] = y[i] + v*sin(φ[i])*dt +  ruidoDty
 
 
+                pos_x[:,j] = x
+                pos_y[:,j] = y
+            end
 
-
-
-
+    end
+    writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",pos_x , ',')
+    writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",pos_y , ',')
+end
 
