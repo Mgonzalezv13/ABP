@@ -161,7 +161,7 @@ function posicion(v,Ω, n_pasos, n_particulas)
             end
 
     end
-    writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",pos_x , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",pos_y , ',')
+    writedlm("/home/mayron/Datos/Posicion_V=$v/pos_x_v=00$v.csv",pos_x , ',')
+    writedlm("/home/mayron/Datos/Posicion_V=_$v/pos_y_v=00$v.csv",pos_y , ',')
 end
 
