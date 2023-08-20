@@ -45,25 +45,11 @@ function barrera(v,Ω, n_pasos, n_particulas)
                 x[i+1] = x[i] + v*cos(φ[i])*dt + ruidoDtx
                 
                 y[i+1] = y[i] + v*sin(φ[i])*dt +  ruidoDty
-    
-                # Angulo de la particula con respecto al centro del circulo
-                dx = x[i+1] - centro_x
-                dy = y[i+1] - centro_y
-                angulo = atan(dy, dx)
-
-                # Se ajusta el angulo entre -pi y pi
-                angulo = angulo % (2*pi)
-                if angulo > pi
-                    angulo -= 2*pi
-                end
-
-                if angulo > inicio_gap && angulo < fin_gap
-                    continue
-                end
-
-
-                #Verificar si la particula esta fuera de la barrera
+               
+            #Verificar la posicion de la particula con respecto al centro del circulo
                 distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
+
+            #Verificar si la particula esta fuera de la barrera
                 if distancia >= radio
                     # Reflejar la particula en la barrera
                     normal_x = (x[i+1] - centro_x) / distancia
@@ -72,20 +58,20 @@ function barrera(v,Ω, n_pasos, n_particulas)
                     
                     producto_punto = (v * cos(φ[i]) * normal_x) + (v * sin(φ[i]) * normal_y)
                     
-                    # Calculate the reflected direction
-                    reflect_x = 2 * producto_punto * normal_x - cos(φ[i])
-                    reflect_y = 2 * producto_punto * normal_y - sin(φ[i])
+                    # Direccion del reflejo
+                    reflejo_x = 2 * producto_punto * normal_x - cos(φ[i])
+                    reflejo_y = 2 * producto_punto * normal_y - sin(φ[i])
                     
-                    # Normalize the reflected direction
-                    reflect_norm = sqrt(reflect_x^2 + reflect_y^2)
-                    reflect_x /= reflect_norm
-                    reflect_y /= reflect_norm
+                    # Norma de la reflexion
+                    reflejo_norm = sqrt(reflejo_x^2 + reflejo_y^2)
+                    reflejo__x /= reflejo__norm
+                    reflejo__y /= reflejo__norm
                     
-                    # Update the position after reflection
+                    # Actualizar posicion despues de la reflexion
                     x[i+1] = centro_x + reflect_x * radio
                     y[i+1] = centro_y + reflect_y * radio
                     
-                    # Calculate the new angle
+                    # Angulo de reflexion    
                     φ[i+1] = atan(reflect_y, reflect_x)
                 end
             
