@@ -64,15 +64,15 @@ function barrera(v,Ω, n_pasos, n_particulas)
                     
                     # Norma de la reflexion
                     reflejo_norm = sqrt(reflejo_x^2 + reflejo_y^2)
-                    reflejo__x /= reflejo__norm
-                    reflejo__y /= reflejo__norm
+                    reflejo_x /= reflejo__norm
+                    reflejo_y /= reflejo__norm
                     
                     # Actualizar posicion despues de la reflexion
-                    x[i+1] = centro_x + reflect_x * radio
-                    y[i+1] = centro_y + reflect_y * radio
+                    x[i+1] = centro_x + reflejo_x * radio
+                    y[i+1] = centro_y + reflejo_y * radio
                     
                     # Angulo de reflexion    
-                    φ[i+1] = atan(reflect_y, reflect_x)
+                    φ[i+1] = atan(reflejo_y, reflejo_x)
                 end
             
             pos_x[:,j] = x
