@@ -64,8 +64,8 @@ function barrera(v,Ω, n_pasos, n_particulas)
                     
                     # Norma de la reflexion
                     reflejo_norm = sqrt(reflejo_x^2 + reflejo_y^2)
-                    reflejo_x /= reflejo__norm
-                    reflejo_y /= reflejo__norm
+                    reflejo_x /= reflejo_norm
+                    reflejo_y /= reflejo_norm
                     
                     # Actualizar posicion despues de la reflexion
                     x[i+1] = centro_x + reflejo_x * radio
@@ -123,14 +123,14 @@ function NSP(v,Ω, n_pasos, n_particulas)
                     angulo -= 2*pi
                 end
 
-                if angulo > inicio_gap && angulo < fin_gap
+                if angulo >= inicio_gap && angulo <= fin_gap
                     continue  
                 end
 
 
                 #Verificar si la particula esta fuera de la barrera
                 distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
-                if distancia > radio
+                if distancia >= radio
                     # Encontrar la norma de la direccion previa a la reflexion
                     normal_x = (x[i+1] - centro_x) / distancia
                     normal_y = (y[i+1] - centro_y) / distancia
@@ -138,21 +138,21 @@ function NSP(v,Ω, n_pasos, n_particulas)
                     #Producto punto 
                     producto_punto = (v * cos(φ[i]) * normal_x) + (v * sin(φ[i]) * normal_y)
                     
-                    # Calcular la direccion luego de la reflexion
-                    reflexion_x = 2 * producto_punto * normal_x - cos(φ[i])
-                    reflexion_y = 2 * producto_punto * normal_y - sin(φ[i])
+                    # Direccion del reflejo
+                    reflejo_x = 2 * producto_punto * normal_x - cos(φ[i])
+                    reflejo_y = 2 * producto_punto * normal_y - sin(φ[i])
                     
-                    # Norma de la direccion despues de la reflexion
-                    norm_reflexion = sqrt(reflect_x^2 + reflect_y^2)
-                    reflexion_x /= norm_reflexion
-                    reflexion_y /= norm_reflexion
-
-                    # Actualizar la posicion 
-                    x[i+1] = centro_x + reflexion_x * radio
-                    y[i+1] = centro_y + reflexion_y * radio
+                    # Norma de la reflexion
+                    reflejo_norm = sqrt(reflejo_x^2 + reflejo_y^2)
+                    reflejo_x /= reflejo_norm
+                    reflejo_y /= reflejo_norm
                     
-                    # Angulo posterior a la reflexion
-                    φ[i+1] = atan(reflexion_y, reflexion_x)
+                    # Actualizar posicion despues de la reflexion
+                    x[i+1] = centro_x + reflejo_x * radio
+                    y[i+1] = centro_y + reflejo_y * radio
+                    
+                    # Angulo de reflexion    
+                    φ[i+1] = atan(reflejo_y, reflejo_x)
                 end
             
             pos_x[:,j] = x
