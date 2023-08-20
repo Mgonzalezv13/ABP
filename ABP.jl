@@ -145,28 +145,28 @@ function NSP(v,Ω, n_pasos, n_particulas)
                 #Verificar si la particula esta fuera de la barrera
                 distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
                 if distancia > radio
-                    # Reflejar la particula en la barrera
+                    # Encontrar la norma de la direccion previa a la reflexion
                     normal_x = (x[i+1] - centro_x) / distancia
                     normal_y = (y[i+1] - centro_y) / distancia
                     
-                    
+                    #Producto punto 
                     producto_punto = (v * cos(φ[i]) * normal_x) + (v * sin(φ[i]) * normal_y)
                     
-                    # Calculate the reflected direction
-                    reflect_x = 2 * producto_punto * normal_x - cos(φ[i])
-                    reflect_y = 2 * producto_punto * normal_y - sin(φ[i])
+                    # Calcular la direccion luego de la reflexion
+                    reflexion_x = 2 * producto_punto * normal_x - cos(φ[i])
+                    reflexion_y = 2 * producto_punto * normal_y - sin(φ[i])
                     
-                    # Normalize the reflected direction
-                    reflect_norm = sqrt(reflect_x^2 + reflect_y^2)
-                    reflect_x /= reflect_norm
-                    reflect_y /= reflect_norm
+                    # Norma de la direccion despues de la reflexion
+                    norm_reflexion = sqrt(reflect_x^2 + reflect_y^2)
+                    reflexion_x /= norm_reflexion
+                    reflexion_y /= norm_reflexion
+
+                    # Actualizar la posicion 
+                    x[i+1] = centro_x + reflexion_x * radio
+                    y[i+1] = centro_y + reflexion_y * radio
                     
-                    # Update the position after reflection
-                    x[i+1] = centro_x + reflect_x * radio
-                    y[i+1] = centro_y + reflect_y * radio
-                    
-                    # Calculate the new angle
-                    φ[i+1] = atan(reflect_y, reflect_x)
+                    # Angulo posterior a la reflexion
+                    φ[i+1] = atan(reflexion_y, reflexion_x)
                 end
             
             pos_x[:,j] = x
