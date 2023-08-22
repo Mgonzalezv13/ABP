@@ -3,14 +3,13 @@ using Random, Plots, DelimitedFiles, ProgressMeter, Distributions
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
-
 L = 40  #diametro del circulo
 centro_x = 0  # centro del circulo en x
 centro_y = 0  # centro del circulo en y
 radio = L/2  # radio del circulo
 inicio_gap = 0
-fin_gap =   pi/8
-
+fin_gap =   pi/6
+radio1 = L/2 + 1
 Dt = 0.22   #Difusion Traslacional
 Dr = 0.16   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
@@ -30,8 +29,8 @@ function barrera(v,Ω, n_pasos, n_particulas)
             φ[1] = rand(uniform_dist)
             random = sqrt(rand())
             rand_ang = randn()*2pi
-            x[1] = radio*random*cos(rand_ang)
-            y[1] = radio*random*sin(rand_ang)
+            x[1] = (radio)*random*cos(rand_ang)
+            y[1] = (radio)*random*sin(rand_ang)
             for i in 1:n_pasos-1
                 
                 ruidoDtx  = sqrtD*randn()
@@ -94,10 +93,11 @@ function NSP(v,Ω, n_pasos, n_particulas)
             y   = similar(x)
             φ   = similar(x)
             φ[1] = rand(uniform_dist)
-            #random = sqrt(rand())
+            random = sqrt(rand())
             rand_ang = randn()*2pi
-            x[1] = 0
-            y[1] = 0
+            x[1] = (radio)*random*cos(rand_ang)
+            y[1] = (radio)*random*sin(rand_ang)
+            escape = false
             for i in 1:n_pasos-1
                 
                 ruidoDtx  = sqrtD*randn()
@@ -123,14 +123,24 @@ function NSP(v,Ω, n_pasos, n_particulas)
                     angulo -= 2*pi
                 end
 
-                if angulo >= inicio_gap && angulo <= fin_gap
-                    continue  
+                distancia = sqrt((dx)^2 + (dy)^2)
+
+                if escape
+                    pos_x[:,j] = x
+                    pos_y[:,j] = y
+                    continue
+                end
+
+                if angulo > inicio_gap && angulo < fin_gap && distancia >= radio
+                    escape = true 
+                    continue
                 end
 
 
+
                 #Verificar si la particula esta fuera de la barrera
-                distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
-                if distancia >= radio
+               
+                if distancia >= radio #&& distancia <= radio1
                     # Encontrar la norma de la direccion previa a la reflexion
                     normal_x = (x[i+1] - centro_x) / distancia
                     normal_y = (y[i+1] - centro_y) / distancia
