@@ -19,11 +19,11 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 uniform_dist = Uniform(0, 2π)
 
 function barrera(v,Ω, n_pasos, n_particulas)
-    pos_x = zeros(n_pasos,n_particulas)
+    pos_x = fill(NaN,n_pasos,n_particulas)
     pos_y = similar(pos_x)
     @showprogress "Calculando trayectorias " for j in 1:n_particulas
         #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-            x   = zeros(n_pasos)
+            x   = fill(NaN,n_pasos)
             y   = similar(x)
             φ   = similar(x)
             φ[1] = rand(uniform_dist)
@@ -85,11 +85,11 @@ function barrera(v,Ω, n_pasos, n_particulas)
 end
 
 function NSP(v,Ω, n_pasos, n_particulas)
-    pos_x = zeros(n_pasos,n_particulas)
+    pos_x = fill(NaN,n_pasos,n_particulas)
     pos_y = similar(pos_x)
     @showprogress "Calculando trayectorias " for j in 1:n_particulas
         #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-            x   = zeros(n_pasos)
+            x   = fill(NaN,n_pasos)
             y   = similar(x)
             φ   = similar(x)
             φ[1] = rand(uniform_dist)
@@ -186,7 +186,7 @@ end
 
 
 function msd(v,Ω, n_pasos, n_particulas)
-    msd_total = zeros(n_pasos,n_particulas)
+    msd_total = fill(NaN,n_pasos,n_particulas)
     @showprogress "Calculando las trayectorias..." for j in 1:n_particulas
             #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
                 x   = zeros(n_pasos)
@@ -222,11 +222,11 @@ end
 
 
 function posicion(v,Ω, n_pasos, n_particulas)
-    pos_x = zeros(n_pasos,n_particulas)
+    pos_x = fill(NaN,n_pasos,n_particulas)
     pos_y = similar(pos_x)
     @showprogress "Calculando trayectorias " for j in 1:n_particulas
         #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-            x   = zeros(n_pasos)
+            x   = fill(NaN,n_pasos)
             y   = similar(x)
             φ   = similar(x)
             x[1] = rand()
