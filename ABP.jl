@@ -18,68 +18,63 @@ sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 uniform_dist = Uniform(0, 2π)
 
-function barrera(v,Ω, n_pasos, n_particulas)
-    pos_x = fill(NaN,n_pasos,n_particulas)
-    pos_y = similar(pos_x)
-    @showprogress "Calculando trayectorias " for j in 1:n_particulas
+function barrera(v, n_pasos, n_particulas, Ω=0)
+    #pos_x = fill(NaN,n_pasos,n_particulas)
+    #pos_y = similar(pos_x)
+   # @showprogress "Calculando trayectorias " for j in 1:n_particulas
         #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-            x   = fill(NaN,n_pasos)
+            x   = fill(NaN,n_pasos,n_particulas)
             y   = similar(x)
             φ   = similar(x)
-            φ[1] = rand(uniform_dist)
+            φ[1,:] = 2pi * randn(n_particulas)
             random = sqrt(rand())
             rand_ang = randn()*2pi
-            x[1] = (radio)*random*cos(rand_ang)
-            y[1] = (radio)*random*sin(rand_ang)
-            for i in 1:n_pasos-1
+            x[1,:] = (rand(n_particulas))
+            y[1,:] = (rand(n_particulas))
+            @showprogress "Calculando trayectorias " for i in 1:n_pasos-1
                 
-                ruidoDtx  = sqrtD*randn()
+                ruidoDtx = sqrtD * randn(n_particulas)
                 
-                ruidoDty  = sqrtD*randn() 
+                ruidoDty = sqrtD * randn(n_particulas)
                 
-                ruidoDr  = sqrtT*randn()
+                ruidoDr  = sqrtT * randn(n_particulas)
                 
-                φ[i+1] = φ[i] + Ω*dt +  ruidoDr
+                φ[i+1,:] = φ[i,:] .+ Ω*dt +  ruidoDr
                 
-                x[i+1] = x[i] + v*cos(φ[i])*dt + ruidoDtx
+                x[i+1,:] = x[i,:] + v*cos.(φ[i,:])*dt + ruidoDtx
                 
-                y[i+1] = y[i] + v*sin(φ[i])*dt +  ruidoDty
+                y[i+1,:] = y[i,:] + v*sin.(φ[i,:])*dt +  ruidoDty
+
+             #   dx = x[i+1] - centro_x
+              #  dy = y[i+1] - centro_y
+                
                
             #Verificar la posicion de la particula con respecto al centro del circulo
-                distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
+               # distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
 
             #Verificar si la particula esta fuera de la barrera
-                if distancia >= radio
-                    # Reflejar la particula en la barrera
-                    normal_x = -(x[i+1] - centro_x) / distancia
-                    normal_y = -(y[i+1] - centro_y) / distancia
+                #if distancia >= radio
+                    # Reflect the particle off the circular wall
+                 #   normal_x = dx / distancia  # x-component of outward normal vector
+                  #  normal_y = dy / distancia  # y-component of outward normal vector
                     
+                    # Reflect the particle's position
+                   # reflejo_x =  normal_x * radio
+                   # reflejo_y =  normal_y * radio
+                   # delta_x   = reflejo_x - x[i+1]
+                   # delta_y   = reflejo_y - y[i+1]
+                   # x[i+1]    = reflejo_x + delta_x
+                   # y[i+1]    = reflejo_y + delta_y
                     
-                    producto_punto = (x[i+1] -distancia) + (y[i+1] -distancia)
-                    
-                    # Direccion del reflejo
-                    reflejo_x = 2 * producto_punto * normal_x - cos(φ[i])
-                    reflejo_y = 2 * producto_punto * normal_y - sin(φ[i])
-                    
-                    # Norma de la reflexion
-                   # reflejo_norm = sqrt(reflejo_x^2 + reflejo_y^2)
-                    #reflejo_x /= reflejo_norm
-                    #reflejo_y /= reflejo_norm
-                    
-                    # Actualizar posicion despues de la reflexion
-                    x[i+1] = centro_x + reflejo_x * radio
-                    y[i+1] = centro_y + reflejo_y * radio
-                    
-                    # Angulo de reflexion    
-                    φ[i+1] = atan(reflejo_y, reflejo_x)
-                end
-            
-            pos_x[:,j] = x
-            pos_y[:,j] = y
+                    # Reflect the angle
+                    #angulo = atan(delta_y, delta_x)
+                    #φ[i+1] = angulo + pi/4 
+                #end
+           # pos_x[:,j] = x
+           # pos_y[:,j] = y
             end
                 
 
-    end
-    writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",pos_x , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",pos_y , ',')
+    writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",x , ',')
+    writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",y , ',')
 end
