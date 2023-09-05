@@ -45,36 +45,38 @@ function barrera(v, n_pasos, n_particulas, Ω=0)
                 
                 y[i+1,:] = y[i,:] + v*sin.(φ[i,:])*dt +  ruidoDty
 
-             #   dx = x[i+1] - centro_x
-              #  dy = y[i+1] - centro_y
+                dx = x[i+1,:] .- centro_x
+                dy = y[i+1,:] .- centro_y
                 
                
             #Verificar la posicion de la particula con respecto al centro del circulo
-               # distancia = sqrt((x[i+1] - centro_x)^2 + (y[i+1] - centro_y)^2)
+                distancia = sqrt.((x[i+1,:] .- centro_x).^2 + (y[i+1,:] .- centro_y).^2)
 
-            #Verificar si la particula esta fuera de la barrera
-                #if distancia >= radio
-                    # Reflect the particle off the circular wall
-                 #   normal_x = dx / distancia  # x-component of outward normal vector
-                  #  normal_y = dy / distancia  # y-component of outward normal vector
-                    
-                    # Reflect the particle's position
-                   # reflejo_x =  normal_x * radio
-                   # reflejo_y =  normal_y * radio
-                   # delta_x   = reflejo_x - x[i+1]
-                   # delta_y   = reflejo_y - y[i+1]
-                   # x[i+1]    = reflejo_x + delta_x
-                   # y[i+1]    = reflejo_y + delta_y
-                    
+                # Verificar si la particula esta fuera de la barrera
+                fuera = distancia .>= radio
+
+                # Reflect particles outside the barrier
+                for j in findall(fuera)
+                    # Calculate the normal vector components
+                    normal_x = dx[j] / distancia[j]
+                    normal_y = dy[j] / distancia[j]
+
+                    # Reflejar la posicion de la particula
+                    reflejo_x = centro_x + normal_x * radio
+                    reflejo_y = centro_y + normal_y * radio
+                    x[i + 1, j] = reflejo_x
+                    y[i + 1, j] = reflejo_y
+
                     # Reflect the angle
-                    #angulo = atan(delta_y, delta_x)
-                    #φ[i+1] = angulo + pi/4 
-                #end
-           # pos_x[:,j] = x
-           # pos_y[:,j] = y
+                    angulo = atan(dy[j], dx[j])
+                    φ[i + 1, j] = angulo + pi / 4
+                end
             end
                 
 
     writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",x , ',')
     writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",y , ',')
+    return x, y
 end
+
+x, y = barrera(10,10000,10)
