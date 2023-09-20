@@ -17,6 +17,11 @@ dt = 10^-3  #Paso temporal
 sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 uniform_dist = Uniform(0, 2π)
+epsilon = 1.0  # Depth of the potential well
+sigma = 1.0*2^(1/6)     # Distance at which potential energy is zero
+radio_particulas = 1.0
+
+threshold_distance = (2^(1/6) ) * 2 * radio_particulas
 
 function barrera(v, n_pasos, n_particulas, Ω=0)
     #pos_x = fill(NaN,n_pasos,n_particulas)
@@ -28,9 +33,9 @@ function barrera(v, n_pasos, n_particulas, Ω=0)
             φ   = similar(x)
             φ[1,:] = 2pi * randn(n_particulas)
             random = sqrt(rand())
-            rand_ang = randn()*2pi
-            x[1,:] = (rand(n_particulas))
-            y[1,:] = (rand(n_particulas))
+            rand_ang = randn(n_particulas)*2pi
+            x[1,:] = radio*sqrt.(rand(n_particulas)).*cos.(rand_ang)
+            y[1,:] = radio*sqrt.(rand(n_particulas)).*sin.(rand_ang)
             @showprogress "Calculando trayectorias " for i in 1:n_pasos-1
                 
                 ruidoDtx = sqrtD * randn(n_particulas)
@@ -52,12 +57,12 @@ function barrera(v, n_pasos, n_particulas, Ω=0)
             #Verificar la posicion de la particula con respecto al centro del circulo
                 distancia = sqrt.((x[i+1,:] .- centro_x).^2 + (y[i+1,:] .- centro_y).^2)
 
-                # Verificar si la particula esta fuera de la barrera
+                # Se define un array con el indice de todas las particulas que están fuera de la barrera en el i-esimo paso temporal
                 fuera = distancia .>= radio
 
                 # Reflect particles outside the barrier
                 for j in findall(fuera)
-                    # Calculate the normal vector components
+                    #se calcula el vector normal al desplazamiento en x e y
                     normal_x = dx[j] / distancia[j]
                     normal_y = dy[j] / distancia[j]
 
@@ -67,7 +72,7 @@ function barrera(v, n_pasos, n_particulas, Ω=0)
                     x[i + 1, j] = reflejo_x
                     y[i + 1, j] = reflejo_y
 
-                    # Reflect the angle
+                    # Refejar el angulo de la particula
                     angulo = atan(dy[j], dx[j])
                     φ[i + 1, j] = angulo + pi / 4
                 end
@@ -79,4 +84,15 @@ function barrera(v, n_pasos, n_particulas, Ω=0)
     return x, y
 end
 
-x, y = barrera(10,10000,10)
+function lennard_jones_force(distance, epsilon, sigma)
+    # Calculate the Lennard-Jones force between two particles
+    r_over_sigma_6 = sigma/distance^6
+    r_over_sigma_12 = sigma/distance^12
+
+    # Calculate the force magnitude
+    force_magnitude =  epsilon * (r_over_sigma_12 - 2*r_over_sigma_6)
+
+    return force_magnitude
+end
+
+x, y = barrera(7,10000,500)
