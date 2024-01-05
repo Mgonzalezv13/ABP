@@ -166,3 +166,34 @@ function condicion_inicial(n_particulas, radio_particula, radio_circulo, max_att
 
     return x_ini, y_ini
 end
+
+
+function quorum_sensing(posicion_x, posicion_y, radio,φ,vc,Ro)
+    
+    n_particulas = length(posicion_x)
+    
+    for i in 1:n_particulas
+        for j in 1:n_particulas
+            if i != j
+                dx = posicion_x[j] - posicion_x[i]
+                dy = posicion_y[j] - posicion_y[i]
+                r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
+                rij = (dx + dy)/r  
+
+                if rij * (cos(φ[j]) + sin(φ[j])) >= cos(vc) && r <= 4*Ro
+                    #Si es que las particulas se encuentran dentro del cono de vision y estan dentro del radio de interaccion
+                   #suma = exp^(-rij / Ro)
+
+
+
+
+
+
+                    #Aca tendria que calcular la suma de la ec. (3) del paper y luego sumarla a φ[i] ???
+                    
+                end
+            end
+        end
+    end
+    return 
+end
