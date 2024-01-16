@@ -3,7 +3,7 @@ using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
-L = 200  #diametro del circulo
+L = 60  #diametro del circulo
 Dt = 0   #Difusion Traslacional
 Dr = 0.01   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
@@ -21,7 +21,6 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio)
          φ[1,:] = rand(0:2pi,n_particulas)
          x[1,:] = rand(-30:30,n_particulas)
          y[1,:] = rand(-30:30,n_particulas)
-        barrera_x, barrera_y = generar_barrera(0,0,25,radio)
         @showprogress "Calculando trayectorias " for i in 2:n_pasos
             
 
@@ -50,6 +49,9 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio)
             y[i,:] = y[i-1,:] + v*sin.(φ[i-1,:])*dt +  ruidoDty
 
 
+
+
+            x[i,:], y[i,:] = periodic_bc(x[i,:],y[i,:],n_particulas,L)
             end  
 
     writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",x , ',')
@@ -154,7 +156,7 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, Ro = 3)
 
                 #angulo = atan(rij[2],rij[1])
 
-                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(pi/3)) && (r <= 4 * Ro)
+                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(pi/2)) && (r <= 4 * Ro)
                     # si las particulas estan dentro del cono de vision y a la distancia indicada
 
 
@@ -167,4 +169,26 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, Ro = 3)
         end
     end 
     return quorum, Nc
+end
+
+function periodic_bc(posicion_x, posicion_y, n_particulas, L)
+    for i in 1:n_particulas
+        if posicion_x[i] > L/2
+            posicion_x[i] -= L
+        end
+
+        if posicion_x[i] < -L/2
+            posicion_x[i] += L
+        end
+
+        if posicion_y[i] > L/2
+            posicion_y[i] -= L
+        end
+
+        if posicion_y[i] < -L/2
+            posicion_y[i] += L
+        end
+    end
+
+    return posicion_x, posicion_y
 end
