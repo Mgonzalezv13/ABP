@@ -3,7 +3,7 @@ using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
-L = 60  #diametro del circulo
+L = 200  #diametro del circulo
 Dt = 0   #Difusion Traslacional
 Dr = 0.01   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
@@ -18,20 +18,19 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio)
         y   = similar(x)
         φ   = similar(x)
         quorum1 = zeros(n_pasos,n_particulas)
-         φ[1,:] = rand(0:2pi,n_particulas)
-         x[1,:] = rand(-30:30,n_particulas)
-         y[1,:] = rand(-30:30,n_particulas)
+        m = zeros(n_pasos) #magnetizacion
+        φ[1,:] = rand(0:2pi,n_particulas).*randn(n_particulas)
+        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,(L/2 -1))
+        m[1] = abs.((sum( ( cos.( φ[1,:] ) ) + ( sin.( φ[1,:] ) ) ))/n_particulas)
         @showprogress "Calculando trayectorias " for i in 2:n_pasos
             
 
-
+            
             f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], radio)
             quorum, Nc = quorum_sensing(x[i-1,:],y[i-1,:],n_particulas,φ[i-1,:])
             quorum1[i-1,:] = quorum
-            x[i-1,:] += f_x*dt
-            y[i-1,:] += f_y*dt
-            #forces1[i-1,:] = f_x
-            #forces2[i-1,:] = f_y 
+            x[i-1,:] += f_x * dt
+            y[i-1,:] += f_y * dt
 
 
 
@@ -42,23 +41,28 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio)
             
             ruidoDr  = sqrtT * randn(n_particulas)
             
-            φ[i,:] = 5*(quorum./Nc)*dt + φ[i-1,:] +  ruidoDr
+            φ[i,:] = φ[i-1,:] + 5*(quorum./Nc)*dt   +  ruidoDr
             
             x[i,:] = x[i-1,:] + v*cos.(φ[i-1,:])*dt + ruidoDtx
             
             y[i,:] = y[i-1,:] + v*sin.(φ[i-1,:])*dt +  ruidoDty
 
-
+            m[i] = abs.(sum( ( cos.( φ[i,:] ) ) + ( sin.( φ[i,:] ) ) )/(n_particulas))
 
 
             x[i,:], y[i,:] = periodic_bc(x[i,:],y[i,:],n_particulas,L)
+
+
+
             end  
 
     writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",x , ',')
     writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",y , ',')
     writedlm("/home/mayron/Datos/barrera_$v/theta_v=00$v.csv",φ , ',')
-   # writedlm("/home/mayron/Datos/barrera_$v/fuerza_x.csv",forces1 , ',')
-   # writedlm("/home/mayron/Datos/barrera_$v/fuerza_y.csv",forces2 , ',')
+    #writedlm("/home/mayron/Datos/barrera_$v/fuerza_x.csv",f1 , ',')
+    #writedlm("/home/mayron/Datos/barrera_$v/fuerza_y.csv",f2 , ',')
+    writedlm("/home/mayron/Datos/barrera_$v/magnetizacion.csv",m , ',')
+        
     writedlm("/home/mayron/Datos/barrera_$v/quorum.csv",quorum1 , ',')
     return x, y
 end
