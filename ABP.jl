@@ -23,21 +23,23 @@ function barrera(v::Int64, n_pasos::Int64, n_particulas::Int64, radio=1, Ω=0)
             x   = zeros(n_pasos,n_particulas)
             y   = similar(x)
             φ   = similar(x)
+            Torque = similar(x)
             forces1 = zeros(n_pasos,n_particulas)
             forces2 = zeros(n_pasos,n_particulas)
-            φ[1,:] = rand(-pi:pi,n_particulas)
+            φ[1,:] = rand(0:2pi,n_particulas)
             random = sqrt(rand())
             rand_ang = randn(n_particulas)*2pi
-            x[1,:], y[1,:] = condicion_inicial(n_particulas,radio,radio_c) 
+            x[1,:], y[1,:] = condicion_inicial(n_particulas,radio,radio_c -1) 
             barrera_x, barrera_y = generar_barrera(0,0,25,radio)
             @showprogress "Calculando trayectorias " for i in 2:n_pasos
                 
 
 
                 f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], radio)
-                fx, fy,  = chequear_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:], radio)
+                fx, fy, τ = chequear_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:], radio)
                 forces1[i-1,:] = fx
                 forces2[i-1,:] = fy 
+                Torque[i-1,:] = τ
                 x[i-1,:] += f_x*dt
                 y[i-1,:] += f_y*dt
                 x[i-1,:] += fx*dt
@@ -50,7 +52,7 @@ function barrera(v::Int64, n_pasos::Int64, n_particulas::Int64, radio=1, Ω=0)
                 
                 ruidoDr  = sqrtT * randn(n_particulas)
                 
-                φ[i,:] = φ[i-1,:] .+ Ω*dt  + ruidoDr
+                φ[i,:] = φ[i-1,:] .+ Ω*dt  + τ./10 + ruidoDr
                 
                 x[i,:] = x[i-1,:] + v*cos.(φ[i-1,:])*dt + ruidoDtx
                 
@@ -68,6 +70,7 @@ function barrera(v::Int64, n_pasos::Int64, n_particulas::Int64, radio=1, Ω=0)
     #writedlm("/home/mayron/Datos/barrera_$v/barrera_y.csv",φ , ',')
     writedlm("/home/mayron/Datos/basura_$v/f_x_v=00$v.csv",forces1 , ',')
     writedlm("/home/mayron/Datos/basura_$v/f_y_v=00$v.csv",forces2 , ',')
+    writedlm("/home/mayron/Datos/basura_$v/Torque_v=00$v.csv",Torque , ',')
     return x, y
 end
 
@@ -175,7 +178,7 @@ function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ , rad
 
             if r <= 2 * radio *2^(1/6)
                 # Potencial de interacción
-                magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
+                magnitud_fuerza = lj_fuerza(r, 0.01, 2 * radio)
                 # Calculamos la componente x e y de la fuerza    
 
 
@@ -183,16 +186,18 @@ function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ , rad
                 f_y = magnitud_fuerza * dy  
 
 
-                 #Calcular el torque
-
-                 τ = cross([cos(φ[i]),sin(φ[i]),0],[f_x,f_y,0] )
-                 torque[i] = τ[3]
-
                 # Actualizamos el array x e y de las fuerzas
                 fuerza_x[i] += f_x
                 fuerza_y[i] += f_y
             end
         end
+
+        # Calculate torque outside of the if block
+        τ = cross([cos(φ[i]), sin(φ[i]), 0], [fuerza_x[i], fuerza_y[i], 0])
+        torque[i] = τ[3]
+
+
+
     end
-    return fuerza_x, fuerza_y
+    return fuerza_x, fuerza_y, torque
 end
