@@ -3,16 +3,16 @@ using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
-L = 200  #diametro del circulo
+L = 700  #diametro del circulo
 Dt = 0   #Difusion Traslacional
 Dr = 0.01   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
-dt = 10^-4  #Paso temporal
+dt = 10^-3  #Paso temporal
 sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 
 
-function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio)
+function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float64)
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
         x   = zeros(n_pasos,n_particulas)
         y   = similar(x)
@@ -20,14 +20,14 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio)
         quorum1 = zeros(n_pasos,n_particulas)
         m = zeros(n_pasos) #magnetizacion
         φ[1,:] = rand(0:2pi,n_particulas).*randn(n_particulas)
-        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,(L/2 -1))
+        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,690)
         m[1] = abs.((sum( ( cos.( φ[1,:] ) ) + ( sin.( φ[1,:] ) ) ))/n_particulas)
         @showprogress "Calculando trayectorias " for i in 2:n_pasos
             
 
             
             f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], radio)
-            quorum, Nc = quorum_sensing(x[i-1,:],y[i-1,:],n_particulas,φ[i-1,:])
+            quorum, Nc = quorum_sensing(x[i-1,:],y[i-1,:],n_particulas,φ[i-1,:],angulo1)
             quorum1[i-1,:] = quorum
             x[i-1,:] += f_x * dt
             y[i-1,:] += f_y * dt
@@ -61,9 +61,9 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio)
     writedlm("/home/mayron/Datos/barrera_$v/theta_v=00$v.csv",φ , ',')
     #writedlm("/home/mayron/Datos/barrera_$v/fuerza_x.csv",f1 , ',')
     #writedlm("/home/mayron/Datos/barrera_$v/fuerza_y.csv",f2 , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/magnetizacion.csv",m , ',')
+    writedlm("/home/mayron/Datos/barrera_$v/φ=$angulo1/_magnetizacion_N=$n_particulas.csv",m , ',')
         
-    writedlm("/home/mayron/Datos/barrera_$v/quorum.csv",quorum1 , ',')
+    #writedlm("/home/mayron/Datos/barrera_$v/quorum.csv",quorum1 , ',')
     return x, y
 end
 
@@ -73,7 +73,7 @@ function correccion_lj(posicion_x, posicion_y, radio)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
     
-    for i in 1:n_particulas
+    Threads.@threads for i in 1:n_particulas
         for j in 1:n_particulas
             if i != j
                 dx = posicion_x[j] - posicion_x[i]
@@ -143,12 +143,12 @@ function condicion_inicial(n_particulas, radio_particula, radio_circulo, max_att
 end
 
 
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, Ro = 3)
+function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1, Ro = 3)
     
     quorum = zeros(n_particulas)
     Nc = ones(n_particulas)
     
-    for i in 1:n_particulas
+    Threads.@threads for i in 1:n_particulas
         for j in 1:n_particulas
             if i != j
 
@@ -160,7 +160,7 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, Ro = 3)
 
                 #angulo = atan(rij[2],rij[1])
 
-                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(pi/2)) && (r <= 4 * Ro)
+                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(angulo1)) && (r <= 4 * Ro)
                     # si las particulas estan dentro del cono de vision y a la distancia indicada
 
 
@@ -176,7 +176,7 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, Ro = 3)
 end
 
 function periodic_bc(posicion_x, posicion_y, n_particulas, L)
-    for i in 1:n_particulas
+    Threads.@threads for i in 1:n_particulas
         if posicion_x[i] > L/2
             posicion_x[i] -= L
         end
