@@ -1,4 +1,4 @@
-using Random, DelimitedFiles, ProgressMeter, Distributions
+using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra
 
 folder_path = "/home/mayron/ABP"
 
@@ -12,14 +12,14 @@ centro_y = 0  # centro del circulo en y
 Dt = 0   #Difusion Traslacional
 Dr = 0.3   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
-dt = 10^-4  #Paso temporal
+dt = 10^-3  #Paso temporal
 sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 uniform_dist = Uniform(0, 2π)
 
-function barrera(v::Int64, n_pasos::Int64, n_particulas::Int64, radio, Ω=0)
+function barrera(v::Int64, n_pasos::Int64, n_particulas::Int64, radio=1, Ω=0)
         #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-            Ro = 4*radio
+            #Ro = 4*radio
             x   = zeros(n_pasos,n_particulas)
             y   = similar(x)
             φ   = similar(x)
@@ -35,9 +35,9 @@ function barrera(v::Int64, n_pasos::Int64, n_particulas::Int64, radio, Ω=0)
 
 
                 f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], radio)
-                fx, fy = chequear_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,radio)
-                #forces1[i-1,:] = f_x
-                #forces2[i-1,:] = f_y 
+                fx, fy,  = chequear_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:], radio)
+                forces1[i-1,:] = fx
+                forces2[i-1,:] = fy 
                 x[i-1,:] += f_x*dt
                 y[i-1,:] += f_y*dt
                 x[i-1,:] += fx*dt
@@ -50,51 +50,24 @@ function barrera(v::Int64, n_pasos::Int64, n_particulas::Int64, radio, Ω=0)
                 
                 ruidoDr  = sqrtT * randn(n_particulas)
                 
-                φ[i,:] = φ[i-1,:] .+ Ω*dt +  ruidoDr
+                φ[i,:] = φ[i-1,:] .+ Ω*dt  + ruidoDr
                 
                 x[i,:] = x[i-1,:] + v*cos.(φ[i-1,:])*dt + ruidoDtx
                 
                 y[i,:] = y[i-1,:] + v*sin.(φ[i-1,:])*dt +  ruidoDty
 
-                dx = x[i,:]  .- centro_x
-                dy = y[i,:]  .- centro_y
-                
-
-                # Verificar la posición de la partícula con respecto al centro del círculo
-                #distancia_c = sqrt.((dx).^2 + (dy).^2)
-
-                # Se define un array con el índice de todas las partículas que están fuera de la barrera en el i-ésimo paso temporal
-                #fuera = distancia_c .>= (radio_c + radio)  # Tomando en cuenta el radio de la particula
-
-                # Reflejar particulas fuera de la barrera
-                #for j in findall(fuera)
-                    
-                    # Calcular el vector normal al desplazamiento en x e y
-                 #   normal_x = dx[j] / distancia_c[j]
-                 #   normal_y = dy[j] / distancia_c[j]
-
-                    # Calcular el punto de reflexión tomando en cuenta el radio de la particula
-                 #   reflejo_x = centro_x + normal_x * (radio_c + radio)
-                 #   reflejo_y = centro_y + normal_y * (radio_c + radio)
-                 #   x[i, j] = reflejo_x
-                 #   y[i, j] = reflejo_y
-
-                    #Calcular nuevo angulo de orientacion
-                 #   angulo = atan(dy[j], dx[j])
-                 #   φ[i, j] = angulo + pi / 2
-                #end
 
 
             end
                 
 
-    writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",x , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",y , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/theta_v=00$v.csv",φ , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/barrera_x.csv",φ , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/barrera_y.csv",φ , ',')
-    #writedlm("/home/mayron/Datos/barrera_$v/f_x_v=00$v.csv",forces1 , ',')
-    #writedlm("/home/mayron/Datos/barrera_$v/f_y_v=00$v.csv",forces2 , ',')
+    writedlm("/home/mayron/Datos/basura_$v/pos_x_v=00$v.csv",x , ',')
+    writedlm("/home/mayron/Datos/basura_$v/pos_y_v=00$v.csv",y , ',')
+    writedlm("/home/mayron/Datos/basura_$v/theta_v=00$v.csv",φ , ',')
+    #writedlm("/home/mayron/Datos/barrera_$v/barrera_x.csv",φ , ',')
+    #writedlm("/home/mayron/Datos/barrera_$v/barrera_y.csv",φ , ',')
+    writedlm("/home/mayron/Datos/basura_$v/f_x_v=00$v.csv",forces1 , ',')
+    writedlm("/home/mayron/Datos/basura_$v/f_y_v=00$v.csv",forces2 , ',')
     return x, y
 end
 
@@ -175,38 +148,8 @@ function condicion_inicial(n_particulas, radio_particula, radio_circulo, max_att
 end
 
 
-function quorum_sensing(posicion_x, posicion_y, radio,φ,vc,Ro)
-    
-    n_particulas = length(posicion_x)
-    
-    for i in 1:n_particulas
-        for j in 1:n_particulas
-            if i != j
-                dx = posicion_x[j] - posicion_x[i]
-                dy = posicion_y[j] - posicion_y[i]
-                r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                rij = (dx + dy)/r  
 
-                if rij * (cos(φ[j]) + sin(φ[j])) >= cos(vc) && r <= 4*Ro
-                    #Si es que las particulas se encuentran dentro del cono de vision y estan dentro del radio de interaccion
-                   #suma = exp^(-rij / Ro)
-
-
-
-
-
-
-                    #Aca tendria que calcular la suma de la ec. (3) del paper y luego sumarla a φ[i] ???
-                    
-                end
-            end
-        end
-    end
-    return 
-end
-
-
-function generar_barrera(centro_x, centro_y, radio_c, radio)
+function generar_barrera(centro_x, centro_y, radio_c, radio=0.5)
     circunferencia = 2 * π * radio_c
     num_particles = round(Int, circunferencia / (2 * radio))
 
@@ -218,10 +161,11 @@ function generar_barrera(centro_x, centro_y, radio_c, radio)
 end
 
 
-function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, radio)
+function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ , radio)
     n_particulas = length(posicion_x)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
+    torque   = similar(fuerza_x)
     
     for i in 1:n_particulas
         for j in 1:length(barrera_x)
@@ -229,12 +173,21 @@ function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, radio)
             dy = barrera_y[j] - posicion_y[i]
             r = sqrt(dx^2 + dy^2)  # Distancia entre las particulas y la barrera
 
-            if r <= 2 * radio
+            if r <= 2 * radio *2^(1/6)
                 # Potencial de interacción
                 magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
                 # Calculamos la componente x e y de la fuerza    
+
+
                 f_x = magnitud_fuerza * dx  
                 f_y = magnitud_fuerza * dy  
+
+
+                 #Calcular el torque
+
+                 τ = cross([cos(φ[i]),sin(φ[i]),0],[f_x,f_y,0] )
+                 torque[i] = τ[3]
+
                 # Actualizamos el array x e y de las fuerzas
                 fuerza_x[i] += f_x
                 fuerza_y[i] += f_y
