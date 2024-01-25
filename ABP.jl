@@ -3,13 +3,14 @@ using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
-L = 700  #diametro del circulo
+L = 500  #diametro del circulo
 Dt = 0   #Difusion Traslacional
 Dr = 0.01   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
 dt = 10^-3  #Paso temporal
 sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
+
 
 
 function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float64)
@@ -20,14 +21,16 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
         quorum1 = zeros(n_pasos,n_particulas)
         m = zeros(n_pasos) #magnetizacion
         φ[1,:] = rand(0:2pi,n_particulas).*randn(n_particulas)
-        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,690)
+        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,48)
         m[1] = abs.((sum( ( cos.( φ[1,:] ) ) + ( sin.( φ[1,:] ) ) ))/n_particulas)
+        barrera_x, barrera_y = generar_barrera(0,0,50,radio)
         @showprogress "Calculando trayectorias " for i in 2:n_pasos
             
 
             
             f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], radio)
             quorum, Nc = quorum_sensing(x[i-1,:],y[i-1,:],n_particulas,φ[i-1,:],angulo1)
+            τ = torque_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:], radio)
             quorum1[i-1,:] = quorum
             x[i-1,:] += f_x * dt
             y[i-1,:] += f_y * dt
@@ -41,7 +44,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
             
             ruidoDr  = sqrtT * randn(n_particulas)
             
-            φ[i,:] = φ[i-1,:] + 5*(quorum./Nc)*dt   +  ruidoDr
+            φ[i,:] = φ[i-1,:] + 5*(quorum./Nc)*dt   +  τ   +  ruidoDr
             
             x[i,:] = x[i-1,:] + v*cos.(φ[i-1,:])*dt + ruidoDtx
             
@@ -50,7 +53,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
             m[i] = abs.(sum( ( cos.( φ[i,:] ) ) + ( sin.( φ[i,:] ) ) )/(n_particulas))
 
 
-            x[i,:], y[i,:] = periodic_bc(x[i,:],y[i,:],n_particulas,L)
+            #x[i,:], y[i,:] = periodic_bc(x[i,:],y[i,:],n_particulas,L)
 
 
 
@@ -61,7 +64,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
     writedlm("/home/mayron/Datos/barrera_$v/theta_v=00$v.csv",φ , ',')
     #writedlm("/home/mayron/Datos/barrera_$v/fuerza_x.csv",f1 , ',')
     #writedlm("/home/mayron/Datos/barrera_$v/fuerza_y.csv",f2 , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/φ=$angulo1/_magnetizacion_N=$n_particulas.csv",m , ',')
+    #writedlm("/home/mayron/Datos/barrera_$v/φ=$angulo1/_magnetizacion_N=$n_particulas.csv",m , ',')
         
     #writedlm("/home/mayron/Datos/barrera_$v/quorum.csv",quorum1 , ',')
     return x, y
@@ -195,4 +198,42 @@ function periodic_bc(posicion_x, posicion_y, n_particulas, L)
     end
 
     return posicion_x, posicion_y
+end
+
+
+
+function generar_barrera(centro_x, centro_y, radio_c, radio=0.5)
+    circunferencia = 2 * π * radio_c
+    num_particles = round(Int, circunferencia / (2 * radio))
+
+    θ = range(0, stop=2π, length=num_particles+1)[1:end-1]  # Angular positions for particles
+    x = centro_x .+ (radio_c - radio) * cos.(θ)
+    y = centro_y .+ (radio_c - radio) * sin.(θ)
+
+    return x, y
+end
+
+
+function torque_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ, radio)
+    n_particulas = length(posicion_x)
+    torque = zeros(n_particulas)
+    
+    for i in 1:n_particulas
+        Threads.@threads for j in 1:length(barrera_x)
+            dx = barrera_x[j] - posicion_x[i]
+            dy = barrera_y[j] - posicion_y[i]
+            r = sqrt(dx^2 + dy^2)  # Distancia entre las particulas y la barrera
+
+            if r <= 2 * radio * 2^(1/6)
+                # Calculamos "n_wall"
+                N_wall = [barrera_x[j], barrera_y[j], 0] / norm([barrera_x[j], barrera_y[j]])
+                t_wall = cross(N_wall, [0, 0, 1])
+
+                # Calculo del torque
+                torque[i] = -(dot([cos(φ[i]), sin(φ[i]), 0], N_wall)) * (dot([cos(φ[i]), sin(φ[i]), 0], t_wall))
+            end
+        end
+    end
+    
+    return torque
 end
