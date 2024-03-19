@@ -126,7 +126,7 @@ function condicion_inicial(n_particulas, radio_particula, radio_circulo, max_att
 
             # Chequear si la posición de la i-ésima partícula no se solapa con otra
             overlap = false
-            for i in 1:length(x_ini)
+            for i in 1:eachindex(x_ini)
                 if sqrt((x - x_ini[i])^2 + (y - y_ini[i])^2) < 2 * radio_particula
                     overlap = true
                     break
@@ -219,7 +219,7 @@ function torque_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ, radio)
     torque = zeros(n_particulas)
     
     for i in 1:n_particulas
-        Threads.@threads for j in 1:length(barrera_x)
+        Threads.@threads for j in 1:eachindex(barrera_x)
             dx = barrera_x[j] - posicion_x[i]
             dy = barrera_y[j] - posicion_y[i]
             r = sqrt(dx^2 + dy^2)  # Distancia entre las particulas y la barrera
