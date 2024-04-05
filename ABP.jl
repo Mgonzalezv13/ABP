@@ -1,5 +1,4 @@
-using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra
-
+using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra, Printf, Dates, Random
 folder_path = "/home/mayron/ABP"
 
 #aca se define el numero de componentes en la direccion x e y
@@ -14,6 +13,16 @@ sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 
 
 function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float64)
+   
+     # Carpeta donde se guardara los datos de la simulacion
+        carpeta = carpeta_simulacion("/home/mayron/Datos")
+
+     # Archivo log con los parámetros de la simulacion
+        generar_log(carpeta, v, n_pasos, n_particulas, radio, angulo1)
+     # Guardar seed
+        #Random.seed!(seed)
+   
+   
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
         x   = zeros(n_pasos,n_particulas)
         y   = similar(x)
@@ -58,11 +67,10 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
 
 
             end  
-
-    writedlm("/home/mayron/Datos/barrera_$v/pos_x_v=00$v.csv",x , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/pos_y_v=00$v.csv",y , ',')
-    writedlm("/home/mayron/Datos/barrera_$v/theta_v=00$v.csv",φ , ',')
-    #writedlm("/home/mayron/Datos/barrera_$v/fuerza_x.csv",f1 , ',')
+        # Guardar las posiciones en los archivos
+        writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x, ',')
+        writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y, ',')
+        writedlm(joinpath(carpeta, "theta_v=$(round(v, digits=2)).csv"), φ, ',')
     #writedlm("/home/mayron/Datos/barrera_$v/fuerza_y.csv",f2 , ',')
     #writedlm("/home/mayron/Datos/barrera_$v/φ=$angulo1/_magnetizacion_N=$n_particulas.csv",m , ',')
         
@@ -237,3 +245,46 @@ function torque_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ, radio)
     
     return torque
 end
+
+function carpeta_simulacion(base_dir)
+    #Obtener la fecha de hoy
+    fecha = Dates.today()
+
+    #Contador de las simulaciones realizadas en el dia
+    contador_sim = 1
+
+    #Formatear la fecha para darle nombre a la carpeta
+    nombre_carpeta = Dates.format(fecha, "yyyy-dd-mm")
+
+    #Si ya existe una carpeta en el dia, le añade un numero como sufijo para no sobreescribir
+    while isdir(joinpath(base_dir, "$nombre_carpeta-$contador_sim"))
+        contador_sim += 1
+    end
+
+    #Se crea la carpeta
+    nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
+    mkdir(nombre_carpeta)
+
+    return nombre_carpeta
+end
+
+function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1)
+    # Formatear la velocidad para incluirlo como string
+    v_str = @sprintf("%.2f", v)
+
+    # Escribir los parámetros en el archivo log
+    log_filename = joinpath(folder_path, "log.txt")
+    open(log_filename, "w") do file
+        println(file, "ESta simulación se realizó el: $(Dates.now())")
+        println(file, "Parámetros de la simulación:")
+        println(file, "v: $v")
+        println(file, "n_pasos: $n_pasos")
+        println(file, "n_particulas: $n_particulas")
+        println(file, "radio: $radio")
+        println(file, "angulo1: $angulo1")
+        #println(file, "Seed: $seed")
+        println(file, "--------------------------------------")
+    end
+end
+
+
