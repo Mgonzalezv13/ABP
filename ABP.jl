@@ -32,6 +32,8 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
         y_data = Vector{Float64}[]
         φ[1,:] = rand(0:2pi,n_particulas).*randn(n_particulas)
         x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,48)
+        push!(x_data, x[1, :])
+        push!(y_data, y[1, :])
         #m[1] = abs.((sum( ( cos.( φ[1,:] ) ) + ( sin.( φ[1,:] ) ) ))/n_particulas)
         barrera_x, barrera_y = generar_barrera(0,0,50,radio)
         @showprogress "Calculando trayectorias " for i in 2:n_pasos
@@ -53,7 +55,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
             
             ruidoDr  = sqrtT * randn(n_particulas)
             
-            φ[i,:] = φ[i-1,:] + 5*(quorum./Nc)*dt   +  τ   +  ruidoDr
+            φ[i,:] = φ[i-1,:] + 5*(quorum./Nc)*dt   +  τ./100   +  ruidoDr
             
             x[i,:] = x[i-1,:] + v*cos.(φ[i-1,:])*dt + ruidoDtx
             
