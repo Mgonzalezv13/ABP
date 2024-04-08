@@ -24,14 +24,15 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
    
    
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        x   = zeros(n_pasos,n_particulas)
-        y   = similar(x)
-        φ   = similar(x)
-        quorum1 = zeros(n_pasos,n_particulas)
-        m = zeros(n_pasos) #magnetizacion
+        x      = zeros(n_pasos,n_particulas)
+        y      = similar(x)
+        φ      = similar(x)
+        #m      = Vector{Float64}[] #magnetizacion
+        x_data = Vector{Float64}[]
+        y_data = Vector{Float64}[]
         φ[1,:] = rand(0:2pi,n_particulas).*randn(n_particulas)
         x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,48)
-        m[1] = abs.((sum( ( cos.( φ[1,:] ) ) + ( sin.( φ[1,:] ) ) ))/n_particulas)
+        #m[1] = abs.((sum( ( cos.( φ[1,:] ) ) + ( sin.( φ[1,:] ) ) ))/n_particulas)
         barrera_x, barrera_y = generar_barrera(0,0,50,radio)
         @showprogress "Calculando trayectorias " for i in 2:n_pasos
             
@@ -40,7 +41,6 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
             f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], radio)
             quorum, Nc = quorum_sensing(x[i-1,:],y[i-1,:],n_particulas,φ[i-1,:],angulo1)
             τ = torque_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:], radio)
-            quorum1[i-1,:] = quorum
             x[i-1,:] += f_x * dt
             y[i-1,:] += f_y * dt
 
@@ -59,23 +59,24 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
             
             y[i,:] = y[i-1,:] + v*sin.(φ[i-1,:])*dt +  ruidoDty
 
-            m[i] = abs.(sum( ( cos.( φ[i,:] ) ) + ( sin.( φ[i,:] ) ) )/(n_particulas))
+            #m[i] = abs.(sum( ( cos.( φ[i,:] ) ) + ( sin.( φ[i,:] ) ) )/(n_particulas))
 
 
             #x[i,:], y[i,:] = periodic_bc(x[i,:],y[i,:],n_particulas,L)
 
-
+            
+                if i % 100 == 0
+                    # Save data for every 100th step
+                    push!(x_data, x[i, :])
+                    push!(y_data, y[i, :])
+                end
 
             end  
         # Guardar las posiciones en los archivos
-        writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x, ',')
-        writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y, ',')
-        writedlm(joinpath(carpeta, "theta_v=$(round(v, digits=2)).csv"), φ, ',')
-    #writedlm("/home/mayron/Datos/barrera_$v/fuerza_y.csv",f2 , ',')
-    #writedlm("/home/mayron/Datos/barrera_$v/φ=$angulo1/_magnetizacion_N=$n_particulas.csv",m , ',')
-        
-    #writedlm("/home/mayron/Datos/barrera_$v/quorum.csv",quorum1 , ',')
-    return x, y
+        writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x_data, ',')
+        writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y_data, ',')
+      
+    return x_data, y_data
 end
 
 
