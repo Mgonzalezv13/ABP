@@ -1,8 +1,6 @@
-using Random, DelimitedFiles, ProgressMeter, Distributions, LinearAlgebra, Printf, Dates, Random, Clustering
-folder_path = "/home/mayron/ABP"
+using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics
 
-#aca se define el numero de componentes en la direccion x e y
-L = 500  #diametro del circulo
+
 Dt = 0   #Difusion Traslacional
 Dr = 8e-2   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
@@ -24,34 +22,27 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
    
    
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        x       = zeros(n_pasos,n_particulas)
-        y       = similar(x)
-        φ       = similar(x)
-        p       = zeros(n_pasos)
+        x       = Matrix{Float64}(undef,n_pasos,n_particulas)
+        y       = Matrix{Float64}(undef,n_pasos,n_particulas)
+        φ       = Matrix{Float64}(undef,n_pasos,n_particulas)
+        p       = Float64[]
+        rg      = Float64[]
         x_data  = Vector{Float64}[]
         y_data  = Vector{Float64}[]
         φ_data  = Vector{Float64}[]
-        p_data  = []
-        rg_data = Vector{Float64}[]
         φ[1,:] = rand(0:2pi,n_particulas)
-        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,98)
-        barrera_x, barrera_y = generar_barrera(0,0,100,radio)
+        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,48)
+        barrera_x, barrera_y = generar_barrera(0,0,50,radio)
         vecinos = Verlet_vecinos(n_particulas,x[1,:],y[1,:],13.)
-        v_barr = Verlet_vecinos(n_particulas,x[1,:],y[1,:],barrera_x,barrera_y,3.)
+        v_barr = Verlet_vecinos(n_particulas,x[1,:],y[1,:],barrera_x,barrera_y,5.)
         vecinos_q = Verlet_vecinos(n_particulas,x[1,:],y[1,:],16.)
-        @showprogress "Calculando trayectorias " for i in 2:n_pasos
+         for i in 2:n_pasos
 
-            if i % 50 == 0
-
-                vecinos_q = Verlet_vecinos(n_particulas,x[i,:],y[i,:],16.)
-                
-
-            end
           
-            f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], vecinos,radio)
-            fb_x, fb_y = chequear_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y, radio, v_barr)
+            f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], vecinos,radio,n_particulas)
+            fb_x, fb_y = chequear_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y, radio, v_barr, n_particulas)
             quorum, Nc = quorum_sensing(x[i-1,:],y[i-1,:],n_particulas,φ[i-1,:], angulo1)
-            τ = torque_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:],  radio, v_barr)
+            τ = torque_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:],  radio, v_barr,n_particulas)
             x[i-1,:] += f_x * dt
             y[i-1,:] += f_y * dt
             x[i-1,:] += fb_x*dt
@@ -77,16 +68,21 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
                     push!(x_data, x[i, :])
                     push!(y_data, y[i, :])
                     push!(φ_data, φ[i, :])
-                    #calcular la lista de vecinos cada 100 pasos
-                    vecinos = Verlet_vecinos(n_particulas,x[i,:],y[i,:],13.)
-                    v_barr = Verlet_vecinos(n_particulas,x[i,:],y[i,:],barrera_x,barrera_y,3.)
                     # Calcular el radio de giro y la magnetizacion cada 100 pasos
-                    rg = rg_dt(x[i,:],y[i,:],10,n_particulas)
-                    p[i] = abs.(sum( ( cos.( φ[i,:] ) ) + ( sin.( φ[i,:] ) ) )/(n_particulas))
+                    push!(p,abs.(sum( ( cos.( φ[i,:] ) ) + ( sin.( φ[i,:] ) ) )/(n_particulas)))
+                    push!(rg,rg_dt(x[i,:],y[i,:],10,n_particulas))
 
-                    push!(p_data,p[i])
-                    push!(rg_data,rg)
+                end
 
+
+
+
+                if i % 200 == 0
+                    #actualizar la lista de vecinos cada 200 pasos
+                    vecinos = Verlet_vecinos(n_particulas,x[i,:],y[i,:],13.)
+                    v_barr = Verlet_vecinos(n_particulas,x[i,:],y[i,:],barrera_x,barrera_y,5.)
+                    vecinos_q = Verlet_vecinos(n_particulas,x[i,:],y[i,:],16.)
+        
                 end
 
             end  
@@ -94,17 +90,16 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
         writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x_data, ',')
         writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y_data, ',')
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
-        writedlm(joinpath(carpeta, "rg_N=$n_particulas.csv"), rg_data, ',')
-        writedlm(joinpath(carpeta, "P_N=$n_particulas.csv"), p_data, ',')
+        writedlm(joinpath(carpeta, "rg_N=$n_particulas.csv"), rg, ',')
+        writedlm(joinpath(carpeta, "P_N=$n_particulas.csv"), p, ',')
 
         
       
-    return x_data, y_data
+    return p,rg
 end
 
 
-function correccion_lj(posicion_x, posicion_y,vecinos, radio)
-    n_particulas = length(posicion_x)
+function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
     
@@ -245,8 +240,7 @@ function generar_barrera(centro_x, centro_y, radio_c, radio=0.5)
     return x, y
 end
 
-function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, radio, vecinos)
-    n_particulas = length(posicion_x)
+function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, radio, vecinos, n_particulas)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
 
@@ -271,8 +265,7 @@ function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, radio, v
     return fuerza_x, fuerza_y
 end
 
-function torque_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ, radio, vecinos)
-    n_particulas = length(posicion_x)
+function torque_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ, radio, vecinos,n_particulas)
     torque = zeros(n_particulas)
     
     for i in 1:n_particulas
@@ -299,15 +292,15 @@ end
 
 function rg_dt(x::Vector{Float64}, y::Vector{Float64}, k_clusters,n_particulas)
     
-    rg = zeros(n_particulas)
+    rg = Vector{Float64}(undef,n_particulas)
 
-    # Combine x and y into a single array
+   
     pos = hcat(x, y)
 
-    # Perform K-means clustering
+    
     cluster_a = kmeans(pos', k_clusters)
 
-    # Get the cluster assignments for each data point
+   
     ind_part = cluster_a.assignments
 
     for i in 1:n_particulas
@@ -321,7 +314,7 @@ function rg_dt(x::Vector{Float64}, y::Vector{Float64}, k_clusters,n_particulas)
         rg[i] = distancia
     end
 
-    r_g = mean(rg,dims=1)
+    r_g = mean(rg)
 
 
 
@@ -357,9 +350,9 @@ function Verlet_vecinos(n_particulas::Int64, posicion_x::Vector{Float64}, posici
 end
 
 function Verlet_vecinos(n_particulas::Int64, posicion_x::Vector{Float64}, posicion_y::Vector{Float64}, barrera_x::Vector{Float64}, barrera_y::Vector{Float64}, r_interaccion::Float64, delta_r=1)
-    # Define an array to store arrays with the indices of the neighbors of particle i
+    
     veci_verlet = Vector{Int64}[]
-    # Define an effective radius to check neighbors
+ 
     r_efectivo = r_interaccion + delta_r
 
     for i in 1:n_particulas
