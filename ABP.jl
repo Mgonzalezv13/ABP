@@ -1,4 +1,4 @@
-using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics
+using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, ProgressMeter
 
 
 Dt = 0   #Difusion Traslacional
@@ -22,31 +22,30 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
    
    
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        x       = Matrix{Float64}(undef,n_pasos,n_particulas)
-        y       = Matrix{Float64}(undef,n_pasos,n_particulas)
-        φ       = Matrix{Float64}(undef,n_pasos,n_particulas)
         p       = Float64[]
         rg      = Float64[]
         x_data  = Vector{Float64}[]
         y_data  = Vector{Float64}[]
         φ_data  = Vector{Float64}[]
-        φ[1,:] = rand(0:2pi,n_particulas)
-        x[1,:] , y[1,:] = condicion_inicial(n_particulas,radio,48)
+        vx_data = Vector{Float64}[]
+        vy_data = Vector{Float64}[]
+        φ_old = rand(0:2pi,n_particulas)
+        x_old , y_old = condicion_inicial(n_particulas,radio,48)
         barrera_x, barrera_y = generar_barrera(0,0,50,radio)
-        vecinos = Verlet_vecinos(n_particulas,x[1,:],y[1,:],13.)
-        v_barr = Verlet_vecinos(n_particulas,x[1,:],y[1,:],barrera_x,barrera_y,5.)
-        vecinos_q = Verlet_vecinos(n_particulas,x[1,:],y[1,:],16.)
-         for i in 2:n_pasos
+        vecinos = Verlet_vecinos(n_particulas,x_old,y_old,3.5)
+        v_barr = Verlet_vecinos(n_particulas,x_old,y_old,barrera_x,barrera_y,5.)
+        vecinos_q = Verlet_vecinos(n_particulas,x_old,y_old,16.)
+         @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y = correccion_lj(x[i-1,:], y[i-1,:], vecinos,radio,n_particulas)
-            fb_x, fb_y = chequear_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y, radio, v_barr, n_particulas)
-            quorum, Nc = quorum_sensing(x[i-1,:],y[i-1,:],n_particulas,φ[i-1,:], angulo1)
-            τ = torque_barrera(x[i-1,:], y[i-1,:],barrera_x,barrera_y,φ[i-1,:],  radio, v_barr,n_particulas)
-            x[i-1,:] += f_x * dt
-            y[i-1,:] += f_y * dt
-            x[i-1,:] += fb_x*dt
-            y[i-1,:] += fb_y*dt
+            f_x, f_y = correccion_lj(x_old, y_old, vecinos,radio,n_particulas)
+            fb_x, fb_y = chequear_barrera(x_old, y_old,barrera_x,barrera_y, radio, v_barr, n_particulas)
+            quorum, Nc = quorum_sensing(x_old,y_old,n_particulas,φ_old, angulo1)
+            τ = torque_barrera(x_old, y_old,barrera_x,barrera_y,φ_old,  radio, v_barr,n_particulas)
+            x_old += f_x * dt
+            y_old += f_y * dt
+            x_old += fb_x*dt
+            y_old += fb_y*dt
 
 
 
@@ -56,21 +55,21 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
             
             ruidoDr  = sqrtT * randn(n_particulas)
             
-            φ[i,:] = φ[i-1,:] + 5*(quorum./Nc)*dt   +  τ./10   +  ruidoDr
+            φ = φ_old + 5*(quorum./Nc)*dt +  τ*dt     +  ruidoDr
             
-            x[i,:] = x[i-1,:] + v*cos.(φ[i-1,:])*dt + ruidoDtx
+            x = x_old + v*cos.(φ_old)*dt  + ruidoDtx
             
-            y[i,:] = y[i-1,:] + v*sin.(φ[i-1,:])*dt +  ruidoDty
+            y = y_old + v*sin.(φ_old)*dt  + ruidoDty
             
             
                 if i % 100 == 0
                     # Guardar datos cada 100 pasos de tiempo
-                    push!(x_data, x[i, :])
-                    push!(y_data, y[i, :])
-                    push!(φ_data, φ[i, :])
+                    push!(x_data, x)
+                    push!(y_data, y)
+                    push!(φ_data, φ)
                     # Calcular el radio de giro y la magnetizacion cada 100 pasos
-                    push!(p,abs.(sum( ( cos.( φ[i,:] ) ) + ( sin.( φ[i,:] ) ) )/(n_particulas)))
-                    push!(rg,rg_dt(x[i,:],y[i,:],10,n_particulas))
+                    push!(p,abs.(sum( ( cos.( φ ) ) + ( sin.( φ ) ) )/(n_particulas)))
+                    push!(rg,rg_dt(x,y,10,n_particulas))
 
                 end
 
@@ -79,11 +78,23 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
 
                 if i % 200 == 0
                     #actualizar la lista de vecinos cada 200 pasos
-                    vecinos = Verlet_vecinos(n_particulas,x[i,:],y[i,:],13.)
-                    v_barr = Verlet_vecinos(n_particulas,x[i,:],y[i,:],barrera_x,barrera_y,5.)
-                    vecinos_q = Verlet_vecinos(n_particulas,x[i,:],y[i,:],16.)
+                    vecinos = Verlet_vecinos(n_particulas,x,y,3.5)
+                    v_barr = Verlet_vecinos(n_particulas,x,y,barrera_x,barrera_y,5.)
+                    vecinos_q = Verlet_vecinos(n_particulas,x,y,16.)
         
                 end
+
+                if i % 1000 == 0
+                    #guardar la velocidad de las particulas
+                    v_partx = f_x * dt +fb_x*dt + v*cos.(φ_old)*dt
+                    v_party = f_y * dt +fb_y*dt + v*sin.(φ_old)*dt
+                    push!(vx_data, v_partx)
+                    push!(vy_data, v_party)
+                end
+
+                φ_old = φ
+                x_old = x
+                y_old = y 
 
             end  
         # Guardar las posiciones en los archivos
@@ -92,7 +103,8 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
         writedlm(joinpath(carpeta, "rg_N=$n_particulas.csv"), rg, ',')
         writedlm(joinpath(carpeta, "P_N=$n_particulas.csv"), p, ',')
-
+        writedlm(joinpath(carpeta, "vx_N=$n_particulas.csv"), vx_data, ',')
+        writedlm(joinpath(carpeta, "vy_N=$n_particulas.csv"), vy_data, ',')    
         
       
     return p,rg
