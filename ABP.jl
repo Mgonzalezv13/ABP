@@ -1,16 +1,16 @@
-using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, ProgressMeter
+using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, ProgressMeter, Random
 
 
-Dt = 0   #Difusion Traslacional
+#Dt = 0   #Difusion Traslacional
 Dr = 8e-2   #Difusion Rotacional
 Ω  = 0.0    #Constante de quiralidad   
-dt = 10^-3  #Paso temporal
-sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
+dt = 10^-4  #Paso temporal
+#sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
 sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
 
 
 
-function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float64)
+function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float64,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
         carpeta = carpeta_simulacion("/home/mayron/Datos")
@@ -22,44 +22,37 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
    
    
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        p       = Float64[]
-        rg      = Float64[]
+       # p       = Float64[]
+       # rg      = Float64[]
         x_data  = Vector{Float64}[]
         y_data  = Vector{Float64}[]
         φ_data  = Vector{Float64}[]
+        rx_data  = Vector{Float64}[]
+        ry_data  = Vector{Float64}[]
         vx_data = Vector{Float64}[]
         vy_data = Vector{Float64}[]
+        q_data = Vector{Float64}[]
         φ_old = rand(0:2pi,n_particulas)
-        x_old , y_old = condicion_inicial(n_particulas,radio,48)
-        barrera_x, barrera_y = generar_barrera(0,0,50,radio)
+        x_old , y_old = condicion_inicial(n_particulas,radio)
         vecinos = Verlet_vecinos(n_particulas,x_old,y_old,3.5)
-        v_barr = Verlet_vecinos(n_particulas,x_old,y_old,barrera_x,barrera_y,5.)
-        vecinos_q = Verlet_vecinos(n_particulas,x_old,y_old,16.)
-         @showprogress "Calculando..." for i in 2:n_pasos
+        rastro_x,rastro_y = rastro(x_old,y_old)
+        @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y = correccion_lj(x_old, y_old, vecinos,radio,n_particulas)
-            fb_x, fb_y = chequear_barrera(x_old, y_old,barrera_x,barrera_y, radio, v_barr, n_particulas)
-            quorum, Nc = quorum_sensing(x_old,y_old,n_particulas,φ_old, angulo1)
-            τ = torque_barrera(x_old, y_old,barrera_x,barrera_y,φ_old,  radio, v_barr,n_particulas)
-            x_old += f_x * dt
-            y_old += f_y * dt
-            x_old += fb_x*dt
-            y_old += fb_y*dt
-
-
-
-            ruidoDtx = sqrtD * randn(n_particulas)
+            f_x, f_y = correccion_lj(x_old, y_old, vecinos,radio_p,n_particulas)
+            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1)
             
-            ruidoDty = sqrtD * randn(n_particulas)
+
             
             ruidoDr  = sqrtT * randn(n_particulas)
             
-            φ = φ_old + 5*(quorum./Nc)*dt +  τ*dt     +  ruidoDr
+            φ = φ_old + 5*(quorum./Nc)*dt + ruidoDr 
             
-            x = x_old + v*cos.(φ_old)*dt  + ruidoDtx
+            x = x_old + v*cos.(φ_old)*dt  + f_x*dt
             
-            y = y_old + v*sin.(φ_old)*dt  + ruidoDty
+            y = y_old + v*sin.(φ_old)*dt  + f_y*dt
+
+
             
             
                 if i % 100 == 0
@@ -67,30 +60,19 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
                     push!(x_data, x)
                     push!(y_data, y)
                     push!(φ_data, φ)
-                    # Calcular el radio de giro y la magnetizacion cada 100 pasos
-                    push!(p,abs.(sum( ( cos.( φ ) ) + ( sin.( φ ) ) )/(n_particulas)))
-                    push!(rg,rg_dt(x,y,10,n_particulas))
-
+                    push!(q_data,quorum)
                 end
-
 
 
 
                 if i % 200 == 0
                     #actualizar la lista de vecinos cada 200 pasos
                     vecinos = Verlet_vecinos(n_particulas,x,y,3.5)
-                    v_barr = Verlet_vecinos(n_particulas,x,y,barrera_x,barrera_y,5.)
-                    vecinos_q = Verlet_vecinos(n_particulas,x,y,16.)
         
                 end
 
-                if i % 1000 == 0
-                    #guardar la velocidad de las particulas
-                    v_partx = f_x * dt +fb_x*dt + v*cos.(φ_old)*dt
-                    v_party = f_y * dt +fb_y*dt + v*sin.(φ_old)*dt
-                    push!(vx_data, v_partx)
-                    push!(vy_data, v_party)
-                end
+                
+            x, y = reflective_bc(x_old, y_old, x, y, radio)
 
                 φ_old = φ
                 x_old = x
@@ -101,13 +83,8 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
         writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x_data, ',')
         writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y_data, ',')
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
-        writedlm(joinpath(carpeta, "rg_N=$n_particulas.csv"), rg, ',')
-        writedlm(joinpath(carpeta, "P_N=$n_particulas.csv"), p, ',')
-        writedlm(joinpath(carpeta, "vx_N=$n_particulas.csv"), vx_data, ',')
-        writedlm(joinpath(carpeta, "vy_N=$n_particulas.csv"), vy_data, ',')    
-        
-      
-    return p,rg
+        #writedlm(joinpath(carpeta, "quorum.csv"), q_data, ',') 
+    return
 end
 
 
@@ -145,7 +122,7 @@ function lj_fuerza(distancia, epsilon, sigma)
 end
 
 
-function condicion_inicial(n_particulas, radio_particula, radio_circulo, max_attempts = 100)
+function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_attempts = 100)
     x_ini = Float64[]  # Array to store x-coordinates
     y_ini = Float64[]  # Array to store y-coordinates
 
@@ -153,7 +130,6 @@ function condicion_inicial(n_particulas, radio_particula, radio_circulo, max_att
 
     for _ in 1:n_particulas
         while true
-            # Check if the number of attempts exceeds the specified limit
 
             # Generar condiciones iniciales en coordenadas polares
             angulo = rand() * 2 * π
@@ -429,3 +405,59 @@ function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1)
 end
 
 
+function rastro(pos_x::Vector{Float64}, pos_y::Vector{Float64})
+
+    rastro_x = copy(pos_x)
+    rastro_y = copy(pos_y)
+
+return rastro_x, rastro_y
+
+end
+
+
+
+
+
+function reflective_bc(x_old, y_old, x, y, R)
+    N = length(x_old)
+    r = @. sqrt(x^2 + y^2)          # Distance from origin
+    outside_mask = r .>= R           # Mask for particles outside the circle
+    outside_indices = findall(outside_mask)
+
+    # Preallocate intersection points
+    p_x = zeros(N)
+    p_y = zeros(N)
+
+    # Compute intersection points for particles outside
+    for i in outside_indices
+        m = (y[i] - y_old[i]) / (x[i] - x_old[i])  # Slope of trajectory line
+        h = y_old[i] - m * x_old[i]                # y-intercept
+        mm = m^2
+        delta = sqrt(R^2 * (1 + mm) - h^2)          # Discriminant
+        raiz1_x = (-m * h + delta) / (1 + mm)       # First intersection (x)
+        raiz1_y = m * raiz1_x + h                   # First intersection (y)
+        raiz2_x = (-m * h - delta) / (1 + mm)       # Second intersection (x)
+        raiz2_y = m * raiz2_x + h                   # Second intersection (y)
+
+        # Choose the correct intersection (between old and new positions)
+        if (x_old[i] < raiz1_x < x[i]) || (y_old[i] < raiz1_y < y[i]) ||
+           (x[i] < raiz1_x < x_old[i]) || (y[i] < raiz1_y < y_old[i])
+            p_x[i], p_y[i] = raiz1_x, raiz1_y
+        else
+            p_x[i], p_y[i] = raiz2_x, raiz2_y
+        end
+    end
+
+    # Compute normal vectors and reflections
+    n_x = @. (-1 / R) * p_x * outside_mask  # Normal vector (inward)
+    n_y = @. (-1 / R) * p_y * outside_mask
+    factor = @. (x - p_x) * n_x + (y - p_y) * n_y  # Dot product
+    x_reflected = @. (x - 2 * n_x * factor) * outside_mask
+    y_reflected = @. (y - 2 * n_y * factor) * outside_mask
+
+    # Combine results: keep particles inside, reflect those outside
+    x_final = @. x * (r < R) + x_reflected
+    y_final = @. y * (r < R) + y_reflected
+
+    return x_final, y_final
+end
