@@ -1,46 +1,37 @@
-using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, ProgressMeter, Random
-
-
-#Dt = 0   #Difusion Traslacional
-Dr = 8e-2   #Difusion Rotacional
-Ω  = 0.0    #Constante de quiralidad   
-dt = 10^-4  #Paso temporal
-#sqrtD = sqrt(2*Dt*dt) #esto corresponde a √(2*Dt*dt)
-sqrtT = sqrt(2*Dr*dt) #esto corresponde a √(2*Dr*dt)
+using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, ProgressMeter, Random, Distances
 
 
 
-function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float64,radio_p = 1)
+dt = 1e-3  #Paso temporal
+
+
+
+
+function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1::Float64,α,Dr,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
         carpeta = carpeta_simulacion("/home/mayron/Datos")
+        η       = packing_fraction(n_particulas,radio)
 
      # Archivo log con los parámetros de la simulacion
-        generar_log(carpeta, v, n_pasos, n_particulas, radio, angulo1)
+        generar_log(carpeta, v, n_pasos, n_particulas, radio, angulo1,η,α,Dr)
      # Guardar seed
         #Random.seed!(seed)
    
-   
+        sqrtT = sqrt(2*Dr*dt)
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-       # p       = Float64[]
-       # rg      = Float64[]
         x_data  = Vector{Float64}[]
         y_data  = Vector{Float64}[]
         φ_data  = Vector{Float64}[]
-        rx_data  = Vector{Float64}[]
-        ry_data  = Vector{Float64}[]
-        vx_data = Vector{Float64}[]
-        vy_data = Vector{Float64}[]
-        q_data = Vector{Float64}[]
         φ_old = rand(0:2pi,n_particulas)
         x_old , y_old = condicion_inicial(n_particulas,radio)
-        vecinos = Verlet_vecinos(n_particulas,x_old,y_old,3.5)
+        vf,vc = vecinos(x_old,y_old,α)
         rastro_x,rastro_y = rastro(x_old,y_old)
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y = correccion_lj(x_old, y_old, vecinos,radio_p,n_particulas)
-            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1)
+            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas)
+            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α)
             
 
             
@@ -60,19 +51,24 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
                     push!(x_data, x)
                     push!(y_data, y)
                     push!(φ_data, φ)
-                    push!(q_data,quorum)
                 end
 
 
 
-                if i % 200 == 0
-                    #actualizar la lista de vecinos cada 200 pasos
-                    vecinos = Verlet_vecinos(n_particulas,x,y,3.5)
+               
+                
+                if i % 150 == 0
+
+                    #actualizar la lista de vecinos cada ciertos pasos
+                    vf,vc = vecinos(x,y,4)
+
+                end
+                
         
-                end
 
                 
             x, y = reflective_bc(x_old, y_old, x, y, radio)
+
 
                 φ_old = φ
                 x_old = x
@@ -83,7 +79,6 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio,angulo1::Float6
         writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x_data, ',')
         writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y_data, ',')
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
-        #writedlm(joinpath(carpeta, "quorum.csv"), q_data, ',') 
     return
 end
 
@@ -98,17 +93,14 @@ function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-
-                if r <= 2*radio * 2^(1/6) 
-                    # Potencial de interaccion
-                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
-                    # Calculamos la componente x e y de la fuerza    
-                    f_x = magnitud_fuerza * dx 
-                    f_y = magnitud_fuerza * dy 
-                    # Updateamos el array x e y de las fuerzas
-                    fuerza_x[i] += f_x
-                    fuerza_y[i] += f_y
-                end
+                # Potencial de interaccion
+                magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
+                # Calculamos la componente x e y de la fuerza    
+                f_x = magnitud_fuerza * dx 
+                f_y = magnitud_fuerza * dy 
+                # Updateamos el array x e y de las fuerzas
+                fuerza_x[i] += f_x
+                fuerza_y[i] += f_y
             end
         end
     end
@@ -161,13 +153,13 @@ function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_a
 end
 
 
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,Ro = 3)
+function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,Ro=3)
     
     quorum = zeros(n_particulas)
     Nc = ones(n_particulas)
     
      for i in 1:n_particulas
-        for j in 1:n_particulas
+        for j in vecinos[i]
             if i != j
 
                 dx = posicion_x[j] - posicion_x[i]
@@ -178,7 +170,7 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,Ro = 3
 
                 #angulo = atan(rij[2],rij[1])
 
-                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(angulo1)) && (r <= 4 * Ro)
+                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(angulo1)) && (r <= α * Ro)
                     # si las particulas estan dentro del cono de vision y a la distancia indicada
 
 
@@ -187,6 +179,9 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,Ro = 3
                     quorum[i] += exp(-r/ Ro)*sin(angulo - φ[i])
                     Nc[i] += exp(-r/ Ro)
                 end
+
+                
+
             end
         end
     end 
@@ -217,64 +212,8 @@ end
 
 
 
-function generar_barrera(centro_x, centro_y, radio_c, radio=0.5)
-    circunferencia = 2 * π * radio_c
-    num_particles = round(Int, circunferencia / (2 * radio))
 
-    θ = range(0, stop=2π, length=num_particles+1)[1:end-1]  # Angular positions for particles
-    x = centro_x .+ (radio_c - radio) * cos.(θ)
-    y = centro_y .+ (radio_c - radio) * sin.(θ)
 
-    return x, y
-end
-
-function chequear_barrera(posicion_x, posicion_y, barrera_x, barrera_y, radio, vecinos, n_particulas)
-    fuerza_x = zeros(n_particulas)
-    fuerza_y = zeros(n_particulas)
-
-    for i in 1:n_particulas
-        for j in vecinos[i]
-            dx = barrera_x[j] - posicion_x[i]
-            dy = barrera_y[j] - posicion_y[i]
-            r = sqrt(dx^2 + dy^2)  # Distancia entre las particulas y la barrera
-
-            if r <= 2 * radio
-                # Potencial de interacción
-                magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
-                # Calculamos la componente x e y de la fuerza    
-                f_x = magnitud_fuerza * dx  
-                f_y = magnitud_fuerza * dy  
-                # Actualizamos el array x e y de las fuerzas
-                fuerza_x[i] += f_x
-                fuerza_y[i] += f_y
-            end
-        end
-    end
-    return fuerza_x, fuerza_y
-end
-
-function torque_barrera(posicion_x, posicion_y, barrera_x, barrera_y, φ, radio, vecinos,n_particulas)
-    torque = zeros(n_particulas)
-    
-    for i in 1:n_particulas
-         for j in vecinos[i]
-            dx = barrera_x[j] - posicion_x[i]
-            dy = barrera_y[j] - posicion_y[i]
-            r = sqrt(dx^2 + dy^2)  # Distancia entre las particulas y la barrera
-
-            if r <= 2 * radio * 2^(1/6)
-                # Calculamos "n_wall"
-                N_wall = [barrera_x[j], barrera_y[j], 0] / norm([barrera_x[j], barrera_y[j]])
-                t_wall = cross(N_wall, [0, 0, 1])
-
-                # Calculo del torque
-                torque[i] = -(dot([cos(φ[i]), sin(φ[i]), 0], N_wall)) * (dot([cos(φ[i]), sin(φ[i]), 0], t_wall))
-            end
-        end
-    end
-    
-    return torque
-end
 
 
 
@@ -309,58 +248,7 @@ function rg_dt(x::Vector{Float64}, y::Vector{Float64}, k_clusters,n_particulas)
     return r_g
 end
 
-function Verlet_vecinos(n_particulas::Int64, posicion_x::Vector{Float64}, posicion_y::Vector{Float64}, r_interaccion::Float64, delta_r=1)
-    # Define un array donde se guardan otro array con los indices de los vecinos de la particula i
-    veci_verlet = Vector{Int64}[]
-    # Defino un radio efectivo para chequear los vecinos
-    r_efectivo = r_interaccion + delta_r
 
-    for i in 1:n_particulas
-        vecinos_i = Int[]
-
-        for j in 1:n_particulas
-            if i != j
-
-                dx  = posicion_x[j] - posicion_x[i]
-                dy  = posicion_y[j] - posicion_y[i]
-                r   = sqrt(dx^2 + dy^2)
-
-                if r < r_efectivo
-                    push!(vecinos_i, j)
-                end
-            end    
-        end
-
-        push!(veci_verlet, vecinos_i)
-    end
-
-    return veci_verlet
-end
-
-function Verlet_vecinos(n_particulas::Int64, posicion_x::Vector{Float64}, posicion_y::Vector{Float64}, barrera_x::Vector{Float64}, barrera_y::Vector{Float64}, r_interaccion::Float64, delta_r=1)
-    
-    veci_verlet = Vector{Int64}[]
- 
-    r_efectivo = r_interaccion + delta_r
-
-    for i in 1:n_particulas
-        vecinos_i = Int[]
-
-        for j in 1:length(barrera_x)
-            dx = barrera_x[j] - posicion_x[i]
-            dy = barrera_y[j] - posicion_y[i]
-            r = sqrt(dx^2 + dy^2)
-
-            if r < r_efectivo
-                push!(vecinos_i, j)
-            end
-        end    
-
-        push!(veci_verlet, vecinos_i)
-    end
-
-    return veci_verlet
-end
 
 
 function carpeta_simulacion(base_dir)
@@ -385,21 +273,25 @@ function carpeta_simulacion(base_dir)
     return nombre_carpeta
 end
 
-function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1)
+function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1, η,α,Dr)
     # Formatear la velocidad para incluirlo como string
     v_str = @sprintf("%.2f", v)
-
+    R0 = 3*α
     # Escribir los parámetros en el archivo log
     log_filename = joinpath(folder_path, "log.txt")
     open(log_filename, "w") do file
-        println(file, "ESta simulación se realizó el: $(Dates.now())")
+        println(file, "Esta simulación se realizó el: $(Dates.now())")
         println(file, "Parámetros de la simulación:")
         println(file, "v: $v")
-        println(file, "n_pasos: $n_pasos")
-        println(file, "n_particulas: $n_particulas")
-        println(file, "radio: $radio")
-        println(file, "angulo1: $angulo1")
-        #println(file, "Seed: $seed")
+        println(file, "Número de iteraciones: $n_pasos")
+        println(file, "Número de partículas: $n_particulas")
+        println(file, "Radio de la barrera: $radio")
+        println(file, "Angulo de apertura del cono de visión: $angulo1")
+        println(file, "Fracción de empaquetamiento: $η")
+        println(file, "Tamaño del cono: $R0")
+        println(file, "Ruido Rotacional: $Dr")
+
+
         println(file, "--------------------------------------")
     end
 end
@@ -460,4 +352,39 @@ function reflective_bc(x_old, y_old, x, y, R)
     y_final = @. y * (r < R) + y_reflected
 
     return x_final, y_final
+end
+
+function packing_fraction(N, R, r=1)
+    η = N * r^2 / R^2
+    return η
+end
+
+
+
+
+function vecinos(x,y, rq = 2)
+    
+    veci_fuerza = Vector{Int}[]
+    veci_cono = Vector{Int}[]
+    pos = hcat(x,y)
+
+
+    r = pairwise(Euclidean(), pos, dims=1)
+
+    r_fuerza = 2*2^(1/6) +1.0
+    r_quorum = rq*3 +1.0
+    for i in 1:size(r,2) 
+
+        v_fuerza = findall(0 .< r[i,:] .<= r_fuerza)
+
+        v_quorum = findall(0 .< r[i,:] .<= r_quorum)
+
+        push!(veci_fuerza, v_fuerza)
+
+        push!(veci_cono, v_quorum)
+
+    end
+
+
+    return veci_fuerza, veci_cono
 end
