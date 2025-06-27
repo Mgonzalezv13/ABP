@@ -188,65 +188,15 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecino
     return quorum, Nc
 end
 
-function periodic_bc(posicion_x, posicion_y, n_particulas, L)
-     for i in 1:n_particulas
-        if posicion_x[i] > L/2
-            posicion_x[i] -= L
-        end
-
-        if posicion_x[i] < -L/2
-            posicion_x[i] += L
-        end
-
-        if posicion_y[i] > L/2
-            posicion_y[i] -= L
-        end
-
-        if posicion_y[i] < -L/2
-            posicion_y[i] += L
-        end
-    end
-
+function periodic_bc(posicion_x, posicion_y, L)
+    posicion_x = mod.(posicion_x .+ L/2, L) .- L/2
+    posicion_y = mod.(posicion_y .+ L/2, L) .- L/2
     return posicion_x, posicion_y
 end
 
 
 
 
-
-
-
-
-function rg_dt(x::Vector{Float64}, y::Vector{Float64}, k_clusters,n_particulas)
-    
-    rg = Vector{Float64}(undef,n_particulas)
-
-   
-    pos = hcat(x, y)
-
-    
-    cluster_a = kmeans(pos', k_clusters)
-
-   
-    ind_part = cluster_a.assignments
-
-    for i in 1:n_particulas
-        # Veo en que cluster esta mi particula e identifico el indice de ese cluster
-        ind_cluster = ind_part[i]
-
-        # distancia de la i-esima particula al centro del cluster 
-        distancia= sqrt(sum((pos[i,:] .- cluster_a.centers[:,ind_cluster]).^2))
-
-        # Calculate radius of gyration for the ith particle
-        rg[i] = distancia
-    end
-
-    r_g = mean(rg)
-
-
-
-    return r_g
-end
 
 
 
@@ -296,15 +246,6 @@ function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1, η,�
     end
 end
 
-
-function rastro(pos_x::Vector{Float64}, pos_y::Vector{Float64})
-
-    rastro_x = copy(pos_x)
-    rastro_y = copy(pos_y)
-
-return rastro_x, rastro_y
-
-end
 
 
 
@@ -373,6 +314,7 @@ function vecinos(x,y, rq = 2)
 
     r_fuerza = 2*2^(1/6) +1.0
     r_quorum = rq*3 +1.0
+
     for i in 1:size(r,2) 
 
         v_fuerza = findall(0 .< r[i,:] .<= r_fuerza)
