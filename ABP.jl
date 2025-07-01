@@ -25,8 +25,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
         φ_data  = Vector{Float64}[]
         φ_old = rand(0:2pi,n_particulas)
         x_old , y_old = condicion_inicial(n_particulas,radio)
-        vf,vc = vecinos(x_old,y_old,α)
-        rastro_x,rastro_y = rastro(x_old,y_old)
+        vf,vc = vecinos_pbc(x_old, y_old, α,100)
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
@@ -57,17 +56,17 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
 
                
                 
-                if i % 150 == 0
+                if i % 50 == 0
 
                     #actualizar la lista de vecinos cada ciertos pasos
-                    vf,vc = vecinos(x,y,4)
+                    vf,vc = vecinos_pbc(x, y, α,100)
 
                 end
                 
         
 
-                
-            x, y = reflective_bc(x_old, y_old, x, y, radio)
+            x, y = periodic_bc(x,y,100)    
+            #x, y = reflective_bc(x_old, y_old, x, y, radio)
 
 
                 φ_old = φ
@@ -193,10 +192,6 @@ function periodic_bc(posicion_x, posicion_y, L)
     posicion_y = mod.(posicion_y .+ L/2, L) .- L/2
     return posicion_x, posicion_y
 end
-
-
-
-
 
 
 
@@ -329,4 +324,112 @@ function vecinos(x,y, rq = 2)
 
 
     return veci_fuerza, veci_cono
+end
+
+
+function vecinos_pbc(x, y, rq,L)
+    N = length(x)
+    inv_L = 1.0 / L
+
+    r_fuerza = 2*2^(1/6) +1.0
+    r_quorum = rq*3 +1.0
+   
+    veci_fuerza = Vector{Int}[]
+    veci_cono = Vector{Int}[]
+    
+    x1 = x .- x'
+    y1 = y .- y'
+
+    dx = x1 .- L .* round.(x1 .* inv_L)
+    dy = y1 .- L .* round.(y1 .* inv_L)
+    
+    r = sqrt.(dx.^2 + dy.^2)
+
+    
+    for i in 1:size(r,2) 
+
+        v_fuerza = findall(0 .< r[i,:] .<= r_fuerza)
+
+        v_quorum = findall(0 .< r[i,:] .<= r_quorum)
+
+        push!(veci_fuerza, v_fuerza)
+
+        push!(veci_cono, v_quorum)
+
+    end
+    
+    return veci_fuerza, veci_cono
+end
+
+
+function vecinos_vectorized(x, y, rq,L)
+
+    N = length(x)
+    inv_L = 1.0 / L
+
+    r_fuerza = 2*2^(1/6) +1.0
+    r_quorum = rq*3 +1.0
+    
+    # Create position matrices using broadcasting
+    dx = x .- x'
+    dy = y .- y'
+    
+    # Apply minimum image convention to all pairs at once
+    dx .= dx .- L .* round.(dx .* inv_L)
+    dy .= dy .- L .* round.(dy .* inv_L)
+    
+    # Calculate distances (not squared - matches your original)
+    r = sqrt.(dx.^2 .+ dy.^2)
+    
+    # Initialize neighbor lists
+    veci_fuerza = Vector{Int}[]
+    veci_cono = Vector{Int}[]
+    
+    # Pre-allocate for performance
+    sizehint!(veci_fuerza, N)
+    sizehint!(veci_cono, N)
+    
+    # Build neighbor lists
+    for i in 1:N
+        # Skip self-interaction (r[i,i] = 0)
+        mask_fuerza = @view r[i,:]
+        mask_quorum = @view r[i,:]
+        
+        v_fuerza = findall(0 .< mask_fuerza .<= r_fuerza)
+        v_quorum = findall(0 .< mask_quorum .<= r_quorum)
+        
+        push!(veci_fuerza, v_fuerza)
+        push!(veci_cono, v_quorum)
+    end
+    
+    return veci_fuerza, veci_cono
+end
+
+
+function apply_minimum_image_convention!(distance_matrix::Matrix{Float64}, L::Int64=100)
+    """
+    Apply minimum image convention to a distance matrix in a periodic box.
+    
+    Args:
+    - distance_matrix: Matrix where distance_matrix[i,j] is the distance between particle i and j
+    - L: Box length (box goes from -L/2 to L/2 in both x and y directions)
+    """
+    half_L = L / 2
+    n_particles = size(distance_matrix, 2)
+    
+    for i in 1:n_particles
+        for j in (i+1):n_particles  # Only need to do upper triangular part
+            # Get current distance components (assuming matrix stores distance magnitudes)
+            # If your matrix stores vector distances, you'd need to modify this
+            dx = distance_matrix[i,j]
+            
+            # Apply minimum image convention for each component
+            dx = dx - L * round(dx / L)
+            
+            # Update the distance in the matrix
+            distance_matrix[i,j] = dx
+            distance_matrix[j,i] = dx  # Keep matrix symmetric
+        end
+    end
+    return distance_matrix
 end
