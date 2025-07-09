@@ -57,7 +57,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
 
                
                 
-                if i % 150 == 0
+                if i % 100 == 0
 
                     #actualizar la lista de vecinos cada ciertos pasos
                     vf,vc = vecinos(x,y,4)
