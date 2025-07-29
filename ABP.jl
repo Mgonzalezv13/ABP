@@ -2,19 +2,19 @@ using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, Pro
 
 
 
-dt = 1e-3  #Paso temporal
+dt = 1e-4  #Paso temporal
 
 
 
 
-function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1::Float64,α,Dr,radio_p = 1)
+function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Float64,α,Dr,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
         carpeta = carpeta_simulacion("/home/mayron/Datos")
-        η       = packing_fraction(n_particulas,radio)
+        η       = packing_fraction(n_particulas,L)
 
      # Archivo log con los parámetros de la simulacion
-        generar_log(carpeta, v, n_pasos, n_particulas, radio, angulo1,η,α,Dr)
+        generar_log(carpeta, v, n_pasos, n_particulas, L, angulo1,η,α,Dr,dt)
      # Guardar seed
         #Random.seed!(seed)
    
@@ -24,19 +24,20 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
         y_data  = Vector{Float64}[]
         φ_data  = Vector{Float64}[]
         φ_old = rand(0:2pi,n_particulas)
-        x_old , y_old = condicion_inicial(n_particulas,radio)
-        vf,vc = vecinos_pbc(x_old, y_old, α,100)
+        #x_old , y_old = condicion_inicial(n_particulas,L/2)
+        x_old , y_old = ini_con_pbc(n_particulas,L)
+        vf,vc = vecinos_pbc(x_old, y_old, α,L)
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas)
-            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α)
+            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas,L)
+            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α,L)
             
 
             
             ruidoDr  = sqrtT * randn(n_particulas)
             
-            φ = φ_old + 5*(quorum./Nc)*dt + ruidoDr 
+            φ = φ_old + ruidoDr + 5*(quorum./Nc)*dt  
             
             x = x_old + v*cos.(φ_old)*dt  + f_x*dt
             
@@ -56,17 +57,16 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
 
                
                 
-                if i % 50 == 0
+                if i % 200 == 0
 
                     #actualizar la lista de vecinos cada ciertos pasos
-                    vf,vc = vecinos_pbc(x, y, α,100)
+                    vf,vc = vecinos_pbc(x, y, α,L)
 
                 end
                 
         
 
-            x, y = periodic_bc(x,y,100)    
-            #x, y = reflective_bc(x_old, y_old, x, y, radio)
+            x, y = periodic_bc(x,y,L)    
 
 
                 φ_old = φ
@@ -82,25 +82,29 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
 end
 
 
-function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
+function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
     
      for i in 1:n_particulas
         for j in vecinos[i]
-            if i != j
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
+
+                dx -= L * round(dx / L)
+                dy -= L * round(dy / L)
+
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                # Potencial de interaccion
-                magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
-                # Calculamos la componente x e y de la fuerza    
-                f_x = magnitud_fuerza * dx 
-                f_y = magnitud_fuerza * dy 
-                # Updateamos el array x e y de las fuerzas
-                fuerza_x[i] += f_x
-                fuerza_y[i] += f_y
-            end
+                if r <= (2^(1/6))*2*radio
+                    # Potencial de interaccion
+                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
+                    # Calculamos la componente x e y de la fuerza    
+                    f_x = -magnitud_fuerza * (dx/r) 
+                    f_y = -magnitud_fuerza * (dy/r) 
+                    # Updateamos el array x e y de las fuerzas
+                    fuerza_x[i] += f_x
+                    fuerza_y[i] += f_y
+                end
         end
     end
     return fuerza_x, fuerza_y
@@ -108,7 +112,7 @@ end
 
 function lj_fuerza(distancia, epsilon, sigma)
         # Calculate the potential energy
-        force = 24 * epsilon * ((sigma^6) / (distancia^8) - 2 * (sigma^12) / (distancia^14))
+        force = 24 * epsilon * (( -(sigma^6) / (distancia^7) ) +2 * ((sigma^12) / (distancia^13)) )
         return force
 end
 
@@ -152,7 +156,7 @@ function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_a
 end
 
 
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,Ro=3)
+function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,L,Ro=3)
     
     quorum = zeros(n_particulas)
     Nc = ones(n_particulas)
@@ -163,6 +167,10 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecino
 
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
+
+                dx -= L * round(dx / L)
+                dy -= L * round(dy / L)
+
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
                 rij = [dx, dy] / r  
 
@@ -218,7 +226,7 @@ function carpeta_simulacion(base_dir)
     return nombre_carpeta
 end
 
-function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1, η,α,Dr)
+function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η,α,Dr,dt)
     # Formatear la velocidad para incluirlo como string
     v_str = @sprintf("%.2f", v)
     R0 = 3*α
@@ -227,10 +235,11 @@ function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1, η,�
     open(log_filename, "w") do file
         println(file, "Esta simulación se realizó el: $(Dates.now())")
         println(file, "Parámetros de la simulación:")
+        println(file, "dt: $dt")
         println(file, "v: $v")
         println(file, "Número de iteraciones: $n_pasos")
         println(file, "Número de partículas: $n_particulas")
-        println(file, "Radio de la barrera: $radio")
+        println(file, "Tamaño caja: $L")
         println(file, "Angulo de apertura del cono de visión: $angulo1")
         println(file, "Fracción de empaquetamiento: $η")
         println(file, "Tamaño del cono: $R0")
@@ -290,8 +299,8 @@ function reflective_bc(x_old, y_old, x, y, R)
     return x_final, y_final
 end
 
-function packing_fraction(N, R, r=1)
-    η = N * r^2 / R^2
+function packing_fraction(N, L, r=1)
+    η = (π * N * r^2) / L^2
     return η
 end
 
@@ -331,26 +340,26 @@ function vecinos_pbc(x, y, rq,L)
     N = length(x)
     inv_L = 1.0 / L
 
+    veci_fuerza = Vector{Int}[]
+    veci_cono = Vector{Int}[]
+
     r_fuerza = 2*2^(1/6) +1.0
     r_quorum = rq*3 +1.0
    
-    veci_fuerza = Vector{Int}[]
-    veci_cono = Vector{Int}[]
-    
     x1 = x .- x'
     y1 = y .- y'
 
     dx = x1 .- L .* round.(x1 .* inv_L)
     dy = y1 .- L .* round.(y1 .* inv_L)
     
-    r = sqrt.(dx.^2 + dy.^2)
+    r_min = sqrt.(dx.^2 + dy.^2)
 
     
-    for i in 1:size(r,2) 
+    for i in 1:size(r_min,2) 
 
-        v_fuerza = findall(0 .< r[i,:] .<= r_fuerza)
+        v_fuerza = findall(0 .< r_min[i,:] .<= r_fuerza)
 
-        v_quorum = findall(0 .< r[i,:] .<= r_quorum)
+        v_quorum = findall(0 .< r_min[i,:] .<= r_quorum)
 
         push!(veci_fuerza, v_fuerza)
 
@@ -361,75 +370,41 @@ function vecinos_pbc(x, y, rq,L)
     return veci_fuerza, veci_cono
 end
 
+function ini_con_pbc(N, L, radio_particula=1)
+    x_ini = Float64[]
+    y_ini = Float64[]
+    min_dist = 2 * radio_particula
 
-function vecinos_vectorized(x, y, rq,L)
+    for _ in 1:N
+        attempts = 0
+        while true
+            attempts += 1
 
-    N = length(x)
-    inv_L = 1.0 / L
+            # Continuous random positions instead of grid
+            x = rand() * L - L/2  # Random position in [-L/2, L/2]
+            y = rand() * L - L/2
 
-    r_fuerza = 2*2^(1/6) +1.0
-    r_quorum = rq*3 +1.0
-    
-    # Create position matrices using broadcasting
-    dx = x .- x'
-    dy = y .- y'
-    
-    # Apply minimum image convention to all pairs at once
-    dx .= dx .- L .* round.(dx .* inv_L)
-    dy .= dy .- L .* round.(dy .* inv_L)
-    
-    # Calculate distances (not squared - matches your original)
-    r = sqrt.(dx.^2 .+ dy.^2)
-    
-    # Initialize neighbor lists
-    veci_fuerza = Vector{Int}[]
-    veci_cono = Vector{Int}[]
-    
-    # Pre-allocate for performance
-    sizehint!(veci_fuerza, N)
-    sizehint!(veci_cono, N)
-    
-    # Build neighbor lists
-    for i in 1:N
-        # Skip self-interaction (r[i,i] = 0)
-        mask_fuerza = @view r[i,:]
-        mask_quorum = @view r[i,:]
-        
-        v_fuerza = findall(0 .< mask_fuerza .<= r_fuerza)
-        v_quorum = findall(0 .< mask_quorum .<= r_quorum)
-        
-        push!(veci_fuerza, v_fuerza)
-        push!(veci_cono, v_quorum)
-    end
-    
-    return veci_fuerza, veci_cono
-end
+            # Check overlaps with PBC
+            overlap = false
+            for i in 1:length(x_ini)
+                dx = abs(x - x_ini[i])
+                dy = abs(y - y_ini[i])
+                # Apply periodic boundary conditions
+                dx = min(dx, L - dx)
+                dy = min(dy, L - dy)
+                
+                if sqrt(dx^2 + dy^2) < min_dist
+                    overlap = true
+                    break
+                end
+            end
 
-
-function apply_minimum_image_convention!(distance_matrix::Matrix{Float64}, L::Int64=100)
-    """
-    Apply minimum image convention to a distance matrix in a periodic box.
-    
-    Args:
-    - distance_matrix: Matrix where distance_matrix[i,j] is the distance between particle i and j
-    - L: Box length (box goes from -L/2 to L/2 in both x and y directions)
-    """
-    half_L = L / 2
-    n_particles = size(distance_matrix, 2)
-    
-    for i in 1:n_particles
-        for j in (i+1):n_particles  # Only need to do upper triangular part
-            # Get current distance components (assuming matrix stores distance magnitudes)
-            # If your matrix stores vector distances, you'd need to modify this
-            dx = distance_matrix[i,j]
-            
-            # Apply minimum image convention for each component
-            dx = dx - L * round(dx / L)
-            
-            # Update the distance in the matrix
-            distance_matrix[i,j] = dx
-            distance_matrix[j,i] = dx  # Keep matrix symmetric
+            if !overlap
+                push!(x_ini, x)
+                push!(y_ini, y)
+                break
+            end
         end
     end
-    return distance_matrix
+    return x_ini, y_ini
 end
