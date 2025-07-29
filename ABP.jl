@@ -10,7 +10,7 @@ dt = 1e-4  #Paso temporal
 function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Float64,α,Dr,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
-        carpeta = carpeta_simulacion("/home/mayron/Datos")
+        carpeta = carpeta_simulacion("/home/mayron/Datos", angulo1,n_particulas,Dr,α)
         η       = packing_fraction(n_particulas,L)
 
      # Archivo log con los parámetros de la simulacion
@@ -204,49 +204,55 @@ end
 
 
 
-function carpeta_simulacion(base_dir)
-    #Obtener la fecha de hoy
-    fecha = Dates.today()
-
-    #Contador de las simulaciones realizadas en el dia
-    contador_sim = 1
-
-    #Formatear la fecha para darle nombre a la carpeta
-    nombre_carpeta = Dates.format(fecha, "yyyy-dd-mm")
-
-    #Si ya existe una carpeta en el dia, le añade un numero como sufijo para no sobreescribir
-    while isdir(joinpath(base_dir, "$nombre_carpeta-$contador_sim"))
-        contador_sim += 1
+function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
+    # Convert angle to nice π format if it's a multiple of π
+    angle_str = if angulo1 == π
+        "π"
+    elseif angulo1 == π/2
+        "π_2"
+    elseif angulo1 == π/3
+        "π_3"
+    elseif angulo1 == π/4
+        "π_4"
+    elseif angulo1 == π/10
+        "π_10"
+    else
+        "$angulo1"
     end
 
-    #Se crea la carpeta
-    nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
+    # Create base folder name with parameters
+    param_str = "N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
+    
+    # Check if folder exists
+    contador_sim = 1
+    nombre_carpeta = joinpath(base_dir, param_str)
+    
+    # If exists, add repeticion counter
+    if isdir(nombre_carpeta)
+        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
+            contador_sim += 1
+        end
+        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
+    end
+    
     mkdir(nombre_carpeta)
-
     return nombre_carpeta
 end
 
-function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η,α,Dr,dt)
-    # Formatear la velocidad para incluirlo como string
-    v_str = @sprintf("%.2f", v)
-    R0 = 3*α
-    # Escribir los parámetros en el archivo log
+function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η, α, Dr, dt)
+    # Write parameters to log file
     log_filename = joinpath(folder_path, "log.txt")
     open(log_filename, "w") do file
-        println(file, "Esta simulación se realizó el: $(Dates.now())")
         println(file, "Parámetros de la simulación:")
+        println(file, "Ángulo: $angulo1")
+        println(file, "N partículas: $n_particulas")
+        println(file, "Dr: $Dr")
         println(file, "dt: $dt")
         println(file, "v: $v")
-        println(file, "Número de iteraciones: $n_pasos")
-        println(file, "Número de partículas: $n_particulas")
+        println(file, "Iteraciones: $n_pasos")
         println(file, "Tamaño caja: $L")
-        println(file, "Angulo de apertura del cono de visión: $angulo1")
-        println(file, "Fracción de empaquetamiento: $η")
-        println(file, "Tamaño del cono: $R0")
-        println(file, "Ruido Rotacional: $Dr")
-
-
-        println(file, "--------------------------------------")
+        println(file, "Empaquetamiento: $η")
+        println(file, "Tamaño cono: $(3*α)")
     end
 end
 
@@ -408,3 +414,4 @@ function ini_con_pbc(N, L, radio_particula=1)
     end
     return x_ini, y_ini
 end
+
