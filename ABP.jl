@@ -20,9 +20,12 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
    
         sqrtT = sqrt(2*Dr*dt)
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        x_data  = Vector{Float64}[]
-        y_data  = Vector{Float64}[]
-        φ_data  = Vector{Float64}[]
+        x_data   = Vector{Float64}[]
+        y_data   = Vector{Float64}[]
+        vx_data  = Vector{Float64}[]
+        vy_data  = Vector{Float64}[]
+        φ_data   = Vector{Float64}[]
+
         φ_old = rand(0:2pi,n_particulas)
         #x_old , y_old = condicion_inicial(n_particulas,L/2)
         x_old , y_old = ini_con_pbc(n_particulas,L)
@@ -36,12 +39,16 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
 
             
             ruidoDr  = sqrtT * randn(n_particulas)
+
+            vx = v*cos.(φ_old)*dt  + f_x*dt
+
+            vy = v*sin.(φ_old)*dt  + f_y*dt
             
-            φ = φ_old + ruidoDr + 5*(quorum./Nc)*dt  
+            φ  = φ_old + ruidoDr + 5*(quorum./Nc)*dt  
             
-            x = x_old + v*cos.(φ_old)*dt  + f_x*dt
+            x  = x_old + vx
             
-            y = y_old + v*sin.(φ_old)*dt  + f_y*dt
+            y  = y_old + vy
 
 
             
@@ -51,6 +58,8 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
                     push!(x_data, x)
                     push!(y_data, y)
                     push!(φ_data, φ)
+                    push!(vx_data, vx)
+                    push!(vy_data, vy)
                 end
 
 
@@ -78,6 +87,9 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
         writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x_data, ',')
         writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y_data, ',')
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
+        writedlm(joinpath(carpeta, "vx=$(round(v, digits=2)).csv"), vx_data, ',')
+        writedlm(joinpath(carpeta, "vy=$(round(v, digits=2)).csv"), vy_data, ',')
+
     return
 end
 
