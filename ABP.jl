@@ -2,7 +2,7 @@ using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, Pro
 
 
 
-dt = 1e-3  #Paso temporal
+dt = 1e-4  #Paso temporal
 
 
 
@@ -10,23 +10,24 @@ dt = 1e-3  #Paso temporal
 function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1::Float64,α,Dr,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
-        carpeta = carpeta_simulacion("/home/mayron/Datos")
+     carpeta = carpeta_simulacion("/home/mayron/Datos", angulo1,n_particulas,Dr,α)
         η       = packing_fraction(n_particulas,radio)
 
      # Archivo log con los parámetros de la simulacion
-        generar_log(carpeta, v, n_pasos, n_particulas, radio, angulo1,η,α,Dr)
+        generar_log(carpeta, v, n_pasos, n_particulas, radio, angulo1,η,α,Dr,dt)
      # Guardar seed
         #Random.seed!(seed)
    
         sqrtT = sqrt(2*Dr*dt)
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        x_data  = Vector{Float64}[]
-        y_data  = Vector{Float64}[]
-        φ_data  = Vector{Float64}[]
+        x_data   = Vector{Float64}[]
+        y_data   = Vector{Float64}[]
+        vx_data  = Vector{Float64}[]
+        vy_data  = Vector{Float64}[]
+        φ_data   = Vector{Float64}[]
         φ_old = rand(0:2pi,n_particulas)
         x_old , y_old = condicion_inicial(n_particulas,radio)
         vf,vc = vecinos(x_old,y_old,α)
-        rastro_x,rastro_y = rastro(x_old,y_old)
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
@@ -36,38 +37,43 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
 
             
             ruidoDr  = sqrtT * randn(n_particulas)
+
+            vx = v*cos.(φ_old)  + f_x
             
+            vy = v*sin.(φ_old)  + f_y
+
             φ = φ_old + 5*(quorum./Nc)*dt + ruidoDr 
             
-            x = x_old + v*cos.(φ_old)*dt  + f_x*dt
+            x = x_old + vx*dt
             
-            y = y_old + v*sin.(φ_old)*dt  + f_y*dt
+            y = y_old + vy*dt
 
-
-            
+            #reflexion
+            x, y = reflective_bc(x_old, y_old, x, y, radio)
             
                 if i % 100 == 0
                     # Guardar datos cada 100 pasos de tiempo
                     push!(x_data, x)
                     push!(y_data, y)
                     push!(φ_data, φ)
+                    push!(vx_data,vx)
+                    push!(vy_data,vy)
                 end
 
 
 
                
                 
-                if i % 100 == 0
+                if i % 200 == 0
 
                     #actualizar la lista de vecinos cada ciertos pasos
-                    vf,vc = vecinos(x,y,4)
+                    vf,vc = vecinos(x,y,α)
 
                 end
                 
         
 
                 
-            x, y = reflective_bc(x_old, y_old, x, y, radio)
 
 
                 φ_old = φ
@@ -79,6 +85,9 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
         writedlm(joinpath(carpeta, "pos_x_v=$(round(v, digits=2)).csv"), x_data, ',')
         writedlm(joinpath(carpeta, "pos_y_v=$(round(v, digits=2)).csv"), y_data, ',')
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
+        writedlm(joinpath(carpeta, "vx=$(round(v, digits=2)).csv"), vx_data, ',')
+        writedlm(joinpath(carpeta, "vy=$(round(v, digits=2)).csv"), vy_data, ',')
+        
     return
 end
 
@@ -89,19 +98,19 @@ function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
     
      for i in 1:n_particulas
         for j in vecinos[i]
-            if i != j
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
                 # Potencial de interaccion
-                magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
-                # Calculamos la componente x e y de la fuerza    
-                f_x = magnitud_fuerza * dx 
-                f_y = magnitud_fuerza * dy 
-                # Updateamos el array x e y de las fuerzas
-                fuerza_x[i] += f_x
-                fuerza_y[i] += f_y
-            end
+                if r <= 2^(1/6)*2*radio
+                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
+                    # Calculamos la componente x e y de la fuerza    
+                    f_x = magnitud_fuerza * dx 
+                    f_y = magnitud_fuerza * dy 
+                    # Updateamos el array x e y de las fuerzas
+                    fuerza_x[i] += f_x
+                    fuerza_y[i] += f_y
+                end
         end
     end
     return fuerza_x, fuerza_y
@@ -215,98 +224,63 @@ end
 
 
 
-
-
-function rg_dt(x::Vector{Float64}, y::Vector{Float64}, k_clusters,n_particulas)
-    
-    rg = Vector{Float64}(undef,n_particulas)
-
-   
-    pos = hcat(x, y)
-
-    
-    cluster_a = kmeans(pos', k_clusters)
-
-   
-    ind_part = cluster_a.assignments
-
-    for i in 1:n_particulas
-        # Veo en que cluster esta mi particula e identifico el indice de ese cluster
-        ind_cluster = ind_part[i]
-
-        # distancia de la i-esima particula al centro del cluster 
-        distancia= sqrt(sum((pos[i,:] .- cluster_a.centers[:,ind_cluster]).^2))
-
-        # Calculate radius of gyration for the ith particle
-        rg[i] = distancia
+function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
+    # Convert angle to nice π format if it's a multiple of π
+    angle_str = if angulo1 == π
+        "π"
+    elseif angulo1 == π/2
+        "π_2"
+    elseif angulo1 == π/3
+        "π_3"
+    elseif angulo1 == π/4
+        "π_4"
+    elseif angulo1 == π/10
+        "π_10"
+    else
+        "$angulo1"
     end
 
-    r_g = mean(rg)
-
-
-
-    return r_g
-end
-
-
-
-
-function carpeta_simulacion(base_dir)
-    #Obtener la fecha de hoy
-    fecha = Dates.today()
-
-    #Contador de las simulaciones realizadas en el dia
+    # Create base folder name with parameters
+    param_str = "Barrera_N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
+    
+    # Check if folder exists
     contador_sim = 1
-
-    #Formatear la fecha para darle nombre a la carpeta
-    nombre_carpeta = Dates.format(fecha, "yyyy-dd-mm")
-
-    #Si ya existe una carpeta en el dia, le añade un numero como sufijo para no sobreescribir
-    while isdir(joinpath(base_dir, "$nombre_carpeta-$contador_sim"))
-        contador_sim += 1
+    nombre_carpeta = joinpath(base_dir, param_str)
+    
+    # If exists, add repeticion counter
+    if isdir(nombre_carpeta)
+        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
+            contador_sim += 1
+        end
+        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
     end
+
 
     #Se crea la carpeta
     nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
+    
+    #Se crea la carpeta
+    nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
     mkdir(nombre_carpeta)
-
     return nombre_carpeta
 end
 
-function generar_log(folder_path, v, n_pasos, n_particulas, radio, angulo1, η,α,Dr)
-    # Formatear la velocidad para incluirlo como string
-    v_str = @sprintf("%.2f", v)
-    R0 = 3*α
-    # Escribir los parámetros en el archivo log
+function generar_log(folder_path, v, n_pasos, n_particulas, R, angulo1, η, α, Dr, dt)
+    # Write parameters to log file
     log_filename = joinpath(folder_path, "log.txt")
     open(log_filename, "w") do file
-        println(file, "Esta simulación se realizó el: $(Dates.now())")
         println(file, "Parámetros de la simulación:")
+        println(file, "Ángulo: $angulo1")
+        println(file, "N partículas: $n_particulas")
+        println(file, "Dr: $Dr")
+        println(file, "dt: $dt")
         println(file, "v: $v")
-        println(file, "Número de iteraciones: $n_pasos")
-        println(file, "Número de partículas: $n_particulas")
-        println(file, "Radio de la barrera: $radio")
-        println(file, "Angulo de apertura del cono de visión: $angulo1")
-        println(file, "Fracción de empaquetamiento: $η")
-        println(file, "Tamaño del cono: $R0")
-        println(file, "Ruido Rotacional: $Dr")
-
-
-        println(file, "--------------------------------------")
+        println(file, "Iteraciones: $n_pasos")
+        println(file, "Radio Confinamiento: $R")
+        println(file, "Empaquetamiento: $η")
+        println(file, "Tamaño cono: $(3*α)")
     end
 end
-
-
-function rastro(pos_x::Vector{Float64}, pos_y::Vector{Float64})
-
-    rastro_x = copy(pos_x)
-    rastro_y = copy(pos_y)
-
-return rastro_x, rastro_y
-
-end
-
-
 
 
 
