@@ -26,7 +26,8 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
         vy_data  = Vector{Float64}[]
         φ_data   = Vector{Float64}[]
         φ_old = rand(0:2pi,n_particulas)
-        x_old , y_old = condicion_inicial(n_particulas,radio)
+        radio_p = rand(radio_p:0.4:1.4,n_particulas)
+        x_old , y_old = condicion_inicial(radio,radio_p,n_particulas)
         vf,vc = vecinos(x_old,y_old,α)
         @showprogress "Calculando..." for i in 2:n_pasos
 
@@ -87,6 +88,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
         writedlm(joinpath(carpeta, "vx=$(round(v, digits=2)).csv"), vx_data, ',')
         writedlm(joinpath(carpeta, "vy=$(round(v, digits=2)).csv"), vy_data, ',')
+        writedlm(joinpath(carpeta, "radio=$(round(v, digits=2)).csv"), radio_p, ',')
         
     return
 end
@@ -95,15 +97,15 @@ end
 function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
-    
      for i in 1:n_particulas
         for j in vecinos[i]
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
+                sigma = (radio[j] + radio[i])/2
                 # Potencial de interaccion
-                if r <= 2^(1/6)*2*radio
-                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
+                if r <= 2^(1/6)*2*sigma
+                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * sigma)
                     # Calculamos la componente x e y de la fuerza    
                     f_x = magnitud_fuerza * dx 
                     f_y = magnitud_fuerza * dy 
@@ -123,43 +125,54 @@ function lj_fuerza(distancia, epsilon, sigma)
 end
 
 
-function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_attempts = 100)
+function condicion_inicial(radio_circulo::Int64, radio_particula::Vector{Float64}, n_particulas::Int64; max_attempts::Int = 1000)
     x_ini = Float64[]  # Array to store x-coordinates
     y_ini = Float64[]  # Array to store y-coordinates
 
+    for j in 1:n_particulas
+        intento = 0
+        colocado = false
 
-
-    for _ in 1:n_particulas
-        while true
+        while intento < max_attempts
+            intento += 1
 
             # Generar condiciones iniciales en coordenadas polares
-            angulo = rand() * 2 * π
-            r = rand(0:(radio_circulo - radio_particula)) 
+            angulo = rand() * 2π
+            r = rand() * (radio_circulo - radio_particula[j])  # Evita colocarla fuera del círculo
 
             # Convertir a coordenadas cartesianas
             x = r * cos(angulo)
             y = r * sin(angulo)
 
-            # Chequear si la posición de la i-ésima partícula no se solapa con otra
+            # Chequear si la partícula no se solapa con otra
             overlap = false
             for i in 1:length(x_ini)
-                if sqrt((x - x_ini[i])^2 + (y - y_ini[i])^2) < 2 * radio_particula
+                dx = x - x_ini[i]
+                dy = y - y_ini[i]
+                distancia = sqrt(dx^2 + dy^2)
+                if distancia < (radio_particula[i] + radio_particula[j])
                     overlap = true
                     break
                 end
             end
 
-            # Si no hay overlap, entonces guarda la posición en x e y
+            # Si no hay overlap, guarda la posición
             if !overlap
                 push!(x_ini, x)
                 push!(y_ini, y)
+                colocado = true
                 break
             end
+        end
+
+        if !colocado
+            error("No se pudo colocar la partícula $j después de $max_attempts intentos.")
         end
     end
 
     return x_ini, y_ini
 end
+
 
 
 function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,Ro=3)
@@ -224,49 +237,42 @@ end
 
 
 
-function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
-    # Convert angle to nice π format if it's a multiple of π
-    angle_str = if angulo1 == π
+function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr, α)
+    # Asegurarse que el directorio base exista
+    mkpath(base_dir)
+
+    # Representación bonita del ángulo (usar isapprox para evitar problemas float)
+    angle_str = if isapprox(angulo1, π)
         "π"
-    elseif angulo1 == π/2
+    elseif isapprox(angulo1, π/2)
         "π_2"
-    elseif angulo1 == π/3
+    elseif isapprox(angulo1, π/3)
         "π_3"
-    elseif angulo1 == π/4
+    elseif isapprox(angulo1, π/4)
         "π_4"
-    elseif angulo1 == π/10
+    elseif isapprox(angulo1, π/10)
         "π_10"
     else
-        "$angulo1"
+        string(angulo1)
     end
 
-    # Create base folder name with parameters
-    param_str = "Barrera_N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
-    
-    # Check if folder exists
-    contador_sim = 1
-    nombre_carpeta = joinpath(base_dir, param_str)
-    
-    # If exists, add repeticion counter
-    if isdir(nombre_carpeta)
-        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
-            contador_sim += 1
-        end
-        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
+    # Nombre base con parámetros
+    nombre_base = "Barrera_N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
+
+    # Construir nombre único: si ya existe, añadir _2, _3, ...
+    contador = 1
+    candidato = joinpath(base_dir, nombre_base)
+    while isdir(candidato) || isfile(candidato)
+        contador += 1
+        candidato = joinpath(base_dir, "$(nombre_base)_$contador")
     end
 
-
-    #Se crea la carpeta
-    nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
-    
-    #Se crea la carpeta
-    nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
-    mkdir(nombre_carpeta)
-    return nombre_carpeta
+    # Crear la carpeta y devolver la ruta completa
+    mkdir(candidato)
+    return candidato
 end
 
 function generar_log(folder_path, v, n_pasos, n_particulas, R, angulo1, η, α, Dr, dt)
-    # Write parameters to log file
     log_filename = joinpath(folder_path, "log.txt")
     open(log_filename, "w") do file
         println(file, "Parámetros de la simulación:")
@@ -281,6 +287,7 @@ function generar_log(folder_path, v, n_pasos, n_particulas, R, angulo1, η, α, 
         println(file, "Tamaño cono: $(3*α)")
     end
 end
+
 
 
 
