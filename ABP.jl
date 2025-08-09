@@ -101,6 +101,9 @@ function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
         for j in vecinos[i]
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
+
+                dx -= L * round(dx / L)
+                dy -= L * round(dy / L)
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
                 sigma = (radio[j] + radio[i])/2
                 # Potencial de interaccion
@@ -183,11 +186,15 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecino
      for i in 1:n_particulas
         for j in vecinos[i]
             if i != j
-
+                
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
+
+                dx -= L * round(dx / L)
+                dy -= L * round(dy / L)
+
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                rij = [dx, dy] / r  
+                rij = [dx, dy] / r      
 
 
                 #angulo = atan(rij[2],rij[1])
