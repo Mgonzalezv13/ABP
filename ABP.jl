@@ -10,7 +10,7 @@ dt = 1e-4  #Paso temporal
 function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Float64,α,Dr,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
-        carpeta = carpeta_simulacion("/home/mayron/Datos", angulo1,n_particulas,Dr,α)
+     carpeta = carpeta_simulacion("/home/mayron/Datos", angulo1,n_particulas,Dr,α)
         η       = packing_fraction(n_particulas,L)
 
      # Archivo log con los parámetros de la simulacion
@@ -25,41 +25,40 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
         vx_data  = Vector{Float64}[]
         vy_data  = Vector{Float64}[]
         φ_data   = Vector{Float64}[]
-
         φ_old = rand(0:2pi,n_particulas)
-        #x_old , y_old = condicion_inicial(n_particulas,L/2)
-        x_old , y_old = ini_con_pbc(n_particulas,L)
-        vf,vc = vecinos_pbc(x_old, y_old, α,L)
+        radio_p = rand(radio_p:0.4:1.4,n_particulas)
+        x_old , y_old = ini_con_pbc(n_particulas,L,radio_p)
+        vf,vc = vecinos_pbc(x_old,y_old,α,L)
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas,L)
-            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α,L)
+            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas)
+            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α)
             
 
             
             ruidoDr  = sqrtT * randn(n_particulas)
 
-            vx = v*cos.(φ_old)*dt  + f_x*dt
+            vx = v*cos.(φ_old)  + f_x
+            
+            vy = v*sin.(φ_old)  + f_y
 
-            vy = v*sin.(φ_old)*dt  + f_y*dt
+            φ = φ_old + 5*(quorum./Nc)*dt + ruidoDr 
             
-            φ  = φ_old + ruidoDr + 5*(quorum./Nc)*dt  
+            x = x_old + vx*dt
             
-            x  = x_old + vx
-            
-            y  = y_old + vy
+            y = y_old + vy*dt
 
-
-            
+            #reflexion
+            x, y = periodic_bc(x,y,n_particulas,L)  
             
                 if i % 100 == 0
                     # Guardar datos cada 100 pasos de tiempo
                     push!(x_data, x)
                     push!(y_data, y)
                     push!(φ_data, φ)
-                    push!(vx_data, vx)
-                    push!(vy_data, vy)
+                    push!(vx_data,vx)
+                    push!(vy_data,vy)
                 end
 
 
@@ -69,13 +68,13 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
                 if i % 200 == 0
 
                     #actualizar la lista de vecinos cada ciertos pasos
-                    vf,vc = vecinos_pbc(x, y, α,L)
+                    vf,vc = vecinos_pbc(x,y,α,L)
 
                 end
                 
         
 
-            x, y = periodic_bc(x,y,L)    
+                
 
 
                 φ_old = φ
@@ -89,30 +88,27 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
         writedlm(joinpath(carpeta, "phi_v=$(round(v, digits=2)).csv"), φ_data, ',')
         writedlm(joinpath(carpeta, "vx=$(round(v, digits=2)).csv"), vx_data, ',')
         writedlm(joinpath(carpeta, "vy=$(round(v, digits=2)).csv"), vy_data, ',')
-
+        writedlm(joinpath(carpeta, "radio=$(round(v, digits=2)).csv"), radio_p, ',')
+        
     return
 end
 
 
-function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
+function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
-    
      for i in 1:n_particulas
         for j in vecinos[i]
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
-
-                dx -= L * round(dx / L)
-                dy -= L * round(dy / L)
-
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                if r <= (2^(1/6))*2*radio
-                    # Potencial de interaccion
-                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
+                sigma = (radio[j] + radio[i])/2
+                # Potencial de interaccion
+                if r <= 2^(1/6)*2*sigma
+                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * sigma)
                     # Calculamos la componente x e y de la fuerza    
-                    f_x = -magnitud_fuerza * (dx/r) 
-                    f_y = -magnitud_fuerza * (dy/r) 
+                    f_x = magnitud_fuerza * dx 
+                    f_y = magnitud_fuerza * dy 
                     # Updateamos el array x e y de las fuerzas
                     fuerza_x[i] += f_x
                     fuerza_y[i] += f_y
@@ -124,43 +120,53 @@ end
 
 function lj_fuerza(distancia, epsilon, sigma)
         # Calculate the potential energy
-        force = 24 * epsilon * (( -(sigma^6) / (distancia^7) ) +2 * ((sigma^12) / (distancia^13)) )
+        force = 24 * epsilon * ((sigma^6) / (distancia^8) - 2 * (sigma^12) / (distancia^14))
         return force
 end
 
 
-function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_attempts = 100)
+function condicion_inicial(radio_circulo::Int64, radio_particula::Vector{Float64}, n_particulas::Int64; max_attempts::Int = 1000)
     x_ini = Float64[]  # Array to store x-coordinates
     y_ini = Float64[]  # Array to store y-coordinates
 
+    for j in 1:n_particulas
+        intento = 0
+        colocado = false
 
-
-    for _ in 1:n_particulas
-        while true
+        while intento < max_attempts
+            intento += 1
 
             # Generar condiciones iniciales en coordenadas polares
-            angulo = rand() * 2 * π
-            r = rand(0:(radio_circulo - radio_particula)) 
+            angulo = rand() * 2π
+            r = rand() * (radio_circulo - radio_particula[j])  # Evita colocarla fuera del círculo
 
             # Convertir a coordenadas cartesianas
             x = r * cos(angulo)
             y = r * sin(angulo)
 
-            # Chequear si la posición de la i-ésima partícula no se solapa con otra
+            # Chequear si la partícula no se solapa con otra
             overlap = false
             for i in 1:length(x_ini)
-                if sqrt((x - x_ini[i])^2 + (y - y_ini[i])^2) < 2 * radio_particula
+                dx = x - x_ini[i]
+                dy = y - y_ini[i]
+                distancia = sqrt(dx^2 + dy^2)
+                if distancia < (radio_particula[i] + radio_particula[j])
                     overlap = true
                     break
                 end
             end
 
-            # Si no hay overlap, entonces guarda la posición en x e y
+            # Si no hay overlap, guarda la posición
             if !overlap
                 push!(x_ini, x)
                 push!(y_ini, y)
+                colocado = true
                 break
             end
+        end
+
+        if !colocado
+            error("No se pudo colocar la partícula $j después de $max_attempts intentos.")
         end
     end
 
@@ -168,7 +174,8 @@ function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_a
 end
 
 
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,L,Ro=3)
+
+function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,Ro=3)
     
     quorum = zeros(n_particulas)
     Nc = ones(n_particulas)
@@ -179,10 +186,6 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecino
 
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
-
-                dx -= L * round(dx / L)
-                dy -= L * round(dy / L)
-
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
                 rij = [dx, dy] / r  
 
@@ -207,52 +210,69 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecino
     return quorum, Nc
 end
 
-function periodic_bc(posicion_x, posicion_y, L)
-    posicion_x = mod.(posicion_x .+ L/2, L) .- L/2
-    posicion_y = mod.(posicion_y .+ L/2, L) .- L/2
+function periodic_bc(posicion_x, posicion_y, n_particulas, L)
+     for i in 1:n_particulas
+        if posicion_x[i] > L/2
+            posicion_x[i] -= L
+        end
+
+        if posicion_x[i] < -L/2
+            posicion_x[i] += L
+        end
+
+        if posicion_y[i] > L/2
+            posicion_y[i] -= L
+        end
+
+        if posicion_y[i] < -L/2
+            posicion_y[i] += L
+        end
+    end
+
     return posicion_x, posicion_y
 end
 
 
 
 
-function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
-    # Convert angle to nice π format if it's a multiple of π
-    angle_str = if angulo1 == π
+
+
+function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr, α)
+    # Asegurarse que el directorio base exista
+    mkpath(base_dir)
+
+    # Representación bonita del ángulo (usar isapprox para evitar problemas float)
+    angle_str = if isapprox(angulo1, π)
         "π"
-    elseif angulo1 == π/2
+    elseif isapprox(angulo1, π/2)
         "π_2"
-    elseif angulo1 == π/3
+    elseif isapprox(angulo1, π/3)
         "π_3"
-    elseif angulo1 == π/4
+    elseif isapprox(angulo1, π/4)
         "π_4"
-    elseif angulo1 == π/10
+    elseif isapprox(angulo1, π/10)
         "π_10"
     else
-        "$angulo1"
+        string(angulo1)
     end
 
-    # Create base folder name with parameters
-    param_str = "N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
-    
-    # Check if folder exists
-    contador_sim = 1
-    nombre_carpeta = joinpath(base_dir, param_str)
-    
-    # If exists, add repeticion counter
-    if isdir(nombre_carpeta)
-        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
-            contador_sim += 1
-        end
-        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
+    # Nombre base con parámetros
+    nombre_base = "PBC_Poli_N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
+
+    # Construir nombre único: si ya existe, añadir _2, _3, ...
+    contador = 1
+    candidato = joinpath(base_dir, nombre_base)
+    while isdir(candidato) || isfile(candidato)
+        contador += 1
+        candidato = joinpath(base_dir, "$(nombre_base)_$contador")
     end
-    
-    mkdir(nombre_carpeta)
-    return nombre_carpeta
+
+    # Crear la carpeta y devolver la ruta completa
+    mkdir(candidato)
+    return candidato
 end
 
-function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η, α, Dr, dt)
-    # Write parameters to log file
+function generar_log(folder_path, v, n_pasos, n_particulas, R, angulo1, η, α, Dr, dt)
     log_filename = joinpath(folder_path, "log.txt")
     open(log_filename, "w") do file
         println(file, "Parámetros de la simulación:")
@@ -262,13 +282,11 @@ function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η, α, 
         println(file, "dt: $dt")
         println(file, "v: $v")
         println(file, "Iteraciones: $n_pasos")
-        println(file, "Tamaño caja: $L")
+        println(file, "Radio Confinamiento: $R")
         println(file, "Empaquetamiento: $η")
         println(file, "Tamaño cono: $(3*α)")
     end
 end
-
-
 
 
 
@@ -325,35 +343,6 @@ end
 
 
 
-function vecinos(x,y, rq = 2)
-    
-    veci_fuerza = Vector{Int}[]
-    veci_cono = Vector{Int}[]
-    pos = hcat(x,y)
-
-
-    r = pairwise(Euclidean(), pos, dims=1)
-
-    r_fuerza = 2*2^(1/6) +1.0
-    r_quorum = rq*3 +1.0
-
-    for i in 1:size(r,2) 
-
-        v_fuerza = findall(0 .< r[i,:] .<= r_fuerza)
-
-        v_quorum = findall(0 .< r[i,:] .<= r_quorum)
-
-        push!(veci_fuerza, v_fuerza)
-
-        push!(veci_cono, v_quorum)
-
-    end
-
-
-    return veci_fuerza, veci_cono
-end
-
-
 function vecinos_pbc(x, y, rq,L)
     N = length(x)
     inv_L = 1.0 / L
@@ -388,18 +377,21 @@ function vecinos_pbc(x, y, rq,L)
     return veci_fuerza, veci_cono
 end
 
-function ini_con_pbc(N, L, radio_particula=1)
+
+
+
+function ini_con_pbc(N, L, radio_particula::Vector{Float64})
+
     x_ini = Float64[]
     y_ini = Float64[]
-    min_dist = 2 * radio_particula
 
-    for _ in 1:N
+    for n in 1:N
         attempts = 0
         while true
             attempts += 1
 
-            # Continuous random positions instead of grid
-            x = rand() * L - L/2  # Random position in [-L/2, L/2]
+            # Random position in [-L/2, L/2]
+            x = rand() * L - L/2
             y = rand() * L - L/2
 
             # Check overlaps with PBC
@@ -407,10 +399,14 @@ function ini_con_pbc(N, L, radio_particula=1)
             for i in 1:length(x_ini)
                 dx = abs(x - x_ini[i])
                 dy = abs(y - y_ini[i])
+
                 # Apply periodic boundary conditions
                 dx = min(dx, L - dx)
                 dy = min(dy, L - dy)
-                
+
+                # Minimum allowed distance = sum of radii
+                min_dist = radio_particula[n] + radio_particula[i]
+
                 if sqrt(dx^2 + dy^2) < min_dist
                     overlap = true
                     break
@@ -424,6 +420,6 @@ function ini_con_pbc(N, L, radio_particula=1)
             end
         end
     end
+
     return x_ini, y_ini
 end
-
