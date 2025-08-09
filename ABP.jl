@@ -32,8 +32,8 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas)
-            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α)
+            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas,L)
+            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α,L)
             
 
             
@@ -94,7 +94,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
 end
 
 
-function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
+function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
      for i in 1:n_particulas
@@ -178,7 +178,7 @@ end
 
 
 
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,Ro=3)
+function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,L,Ro=3)
     
     quorum = zeros(n_particulas)
     Nc = ones(n_particulas)
@@ -186,7 +186,7 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecino
      for i in 1:n_particulas
         for j in vecinos[i]
             if i != j
-                
+
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
 
