@@ -15,19 +15,16 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
 
      # Archivo log con los parámetros de la simulacion
         generar_log(carpeta, v, n_pasos, n_particulas, L, angulo1,η,α,Dr,dt)
-     # Guardar seed
-        #Random.seed!(seed)
-   
-        sqrtT = sqrt(2*Dr*dt)
-    #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        x_data   = Vector{Float64}[]
-        y_data   = Vector{Float64}[]
-        vx_data  = Vector{Float64}[]
-        vy_data  = Vector{Float64}[]
-        φ_data   = Vector{Float64}[]
+    
+        sqrtT = sqrt(2*Dr*dt) #esta cantidad se mantiene fija
+
+        x_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        y_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        vx_data  = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        vy_data  = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        φ_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
 
         φ_old = rand(0:2pi,n_particulas)
-        #x_old , y_old = condicion_inicial(n_particulas,L/2)
         x_old , y_old = ini_con_pbc(n_particulas,L)
         vf,vc = vecinos_pbc(x_old, y_old, α,L)
         @showprogress "Calculando..." for i in 2:n_pasos
@@ -50,16 +47,16 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
             
             y  = y_old + vy
 
-
+            x, y = periodic_bc(x,y,L)   
             
             
                 if i % 100 == 0
                     # Guardar datos cada 100 pasos de tiempo
-                    push!(x_data, x)
-                    push!(y_data, y)
-                    push!(φ_data, φ)
-                    push!(vx_data, vx)
-                    push!(vy_data, vy)
+                    x_data[Int64(i/100),:]  .= x 
+                    y_data[Int64(i/100),:]  .= y
+                    φ_data[Int64(i/100),:]  .= φ
+                    vx_data[Int64(i/100),:] .= vx
+                    vy_data[Int64(i/100),:] .= vy
                 end
 
 
@@ -74,8 +71,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
                 end
                 
         
-
-            x, y = periodic_bc(x,y,L)    
+ 
 
 
                 φ_old = φ
