@@ -20,11 +20,11 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
    
         sqrtT = sqrt(2*Dr*dt)
     #Aca se definen vectores "vacios" para almacenar las posiciones en x e y de cada particula 
-        x_data   = Vector{Float64}[]
-        y_data   = Vector{Float64}[]
-        vx_data  = Vector{Float64}[]
-        vy_data  = Vector{Float64}[]
-        φ_data   = Vector{Float64}[]
+        x_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        y_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        vx_data  = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        vy_data  = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        φ_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
         φ_old = rand(0:2pi,n_particulas)
         x_old , y_old = condicion_inicial(n_particulas,radio)
         vf,vc = vecinos(x_old,y_old,α)
@@ -51,14 +51,14 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
             #reflexion
             x, y = reflective_bc(x_old, y_old, x, y, radio)
             
-                if i % 100 == 0
-                    # Guardar datos cada 100 pasos de tiempo
-                    push!(x_data, x)
-                    push!(y_data, y)
-                    push!(φ_data, φ)
-                    push!(vx_data,vx)
-                    push!(vy_data,vy)
-                end
+            if i % 100 == 0
+                # Guardar datos cada 100 pasos de tiempo
+                x_data[Int64(i/100),:]  .= x 
+                y_data[Int64(i/100),:]  .= y
+                φ_data[Int64(i/100),:]  .= φ
+                vx_data[Int64(i/100),:] .= vx
+                vy_data[Int64(i/100),:] .= vy
+            end
 
 
 
@@ -223,8 +223,7 @@ end
 
 
 
-
-function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
+function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr, α)
     # Convert angle to nice π format if it's a multiple of π
     angle_str = if angulo1 == π
         "π"
@@ -240,27 +239,17 @@ function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
         "$angulo1"
     end
 
-    # Create base folder name with parameters
-    param_str = "Barrera_N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
-    
-    # Check if folder exists
-    contador_sim = 1
+    # Base folder name with parameters
+    param_str = "Barrera_N=$(n_particulas)-θ=$(angle_str)-Dr=$(Dr)-Ro=$(3*α)"
     nombre_carpeta = joinpath(base_dir, param_str)
-    
-    # If exists, add repeticion counter
-    if isdir(nombre_carpeta)
-        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
-            contador_sim += 1
-        end
-        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
+
+    # Add repetition counter only if needed
+    contador_sim = 1
+    while isdir(nombre_carpeta)
+        contador_sim += 1
+        nombre_carpeta = joinpath(base_dir, "$(param_str)_$(contador_sim)")
     end
 
-
-    #Se crea la carpeta
-    nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
-    
-    #Se crea la carpeta
-    nombre_carpeta = joinpath(base_dir, "$nombre_carpeta-$contador_sim")
     mkdir(nombre_carpeta)
     return nombre_carpeta
 end
