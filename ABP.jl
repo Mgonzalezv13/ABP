@@ -239,15 +239,20 @@ function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr, α)
         "$angulo1"
     end
 
-    # Base folder name with parameters
+    
     param_str = "Barrera_N=$(n_particulas)-θ=$(angle_str)-Dr=$(Dr)-Ro=$(3*α)"
     nombre_carpeta = joinpath(base_dir, param_str)
 
-    # Add repetition counter only if needed
+    
     contador_sim = 1
-    while isdir(nombre_carpeta)
-        contador_sim += 1
-        nombre_carpeta = joinpath(base_dir, "$(param_str)_$(contador_sim)")
+    nombre_carpeta = joinpath(base_dir, param_str)
+    
+    
+    if isdir(nombre_carpeta)
+        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
+            contador_sim += 1
+        end
+        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
     end
 
     mkdir(nombre_carpeta)
