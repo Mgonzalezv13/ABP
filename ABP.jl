@@ -107,11 +107,11 @@ function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
                 sigma = (radio[j] + radio[i])/2
                 # Potencial de interaccion
-                if r <= 2^(1/6)*2*sigma
-                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * sigma)
+                if r <= 2*sigma
+                    magnitud_fuerza = soft_fuerza(r, 125, 2 * sigma)
                     # Calculamos la componente x e y de la fuerza    
-                    f_x = magnitud_fuerza * dx 
-                    f_y = magnitud_fuerza * dy 
+                    f_x = -magnitud_fuerza * dx 
+                    f_y = -magnitud_fuerza * dy 
                     # Updateamos el array x e y de las fuerzas
                     fuerza_x[i] += f_x
                     fuerza_y[i] += f_y
@@ -121,12 +121,10 @@ function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
     return fuerza_x, fuerza_y
 end
 
-function lj_fuerza(distancia, epsilon, sigma)
-        # Calculate the potential energy
-        force = 24 * epsilon * ((sigma^6) / (distancia^8) - 2 * (sigma^12) / (distancia^14))
-        return force
-end
 
+function soft_fuerza(distancia, epsilon, sigma)
+    return epsilon * (1 - (distancia /(sigma)))^(3/2)
+end
 
 function condicion_inicial(radio_circulo::Int64, radio_particula::Vector{Float64}, n_particulas::Int64; max_attempts::Int = 1000)
     x_ini = Float64[]  # Array to store x-coordinates
