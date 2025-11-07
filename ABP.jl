@@ -26,6 +26,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
 
         φ_old = rand(0:2pi,n_particulas)
         x_old , y_old = ini_con_pbc(n_particulas,L)
+        vx_old , vy_old = zeros(n_particulas), zeros(n_particulas) 
         vf,vc = vecinos_pbc(x_old, y_old, α,L)
         @showprogress "Calculando..." for i in 2:n_pasos
 
@@ -33,19 +34,22 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
             f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas,L)
             quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α,L)
             
+            #tomando γ = m = 1
 
+            γ = 1.0     
+            m = 1.0     
             
             ruidoDr  = sqrtT * randn(n_particulas)
 
-            vx = v*cos.(φ_old)*dt  + f_x*dt
+            vx = vx_old + dt/m * ( -γ*vx_old + γ*v*cos.(φ_old)  + f_x )
 
-            vy = v*sin.(φ_old)*dt  + f_y*dt
+            vy = vy_old + dt/m * ( -γ*vy_old + γ*v*sin.(φ_old)  + f_y )
             
             φ  = φ_old + ruidoDr + 5*(quorum./Nc)*dt  
             
-            x  = x_old + vx
+            x  = x_old + vx*dt
             
-            y  = y_old + vy
+            y  = y_old + vy*dt
 
             x, y = periodic_bc(x,y,L)   
             
@@ -77,6 +81,8 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
                 φ_old = φ
                 x_old = x
                 y_old = y 
+                vx_old = vx
+                vy_old = vy
 
             end  
         # Guardar las posiciones en los archivos
