@@ -7,14 +7,14 @@ dt = 1e-4  #Paso temporal
 
 
 
-function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Float64,α,Dr,radio_p = 1)
+function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, R::Float64, angulo1::Float64,α,Dr,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
         carpeta = carpeta_simulacion("/home/mayron/Datos", angulo1,n_particulas,Dr,α)
-        η       = packing_fraction(n_particulas,L)
+        η       = packing_fraction(n_particulas,R)
 
      # Archivo log con los parámetros de la simulacion
-        generar_log(carpeta, v, n_pasos, n_particulas, L, angulo1,η,α,Dr,dt)
+        generar_log(carpeta, v, n_pasos, n_particulas, R, angulo1,η,α,Dr,dt)
     
         sqrtT = sqrt(2*Dr*dt) #esta cantidad se mantiene fija
 
@@ -25,14 +25,14 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
         φ_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
 
         φ_old = rand(0:2pi,n_particulas)
-        x_old , y_old = ini_con_pbc(n_particulas,L)
+        x_old , y_old = condicion_inicial(n_particulas,R)
         vx_old , vy_old = zeros(n_particulas), zeros(n_particulas) 
-        vf,vc = vecinos_pbc(x_old, y_old, α,L)
+        vf,vc = vecinos(x_old,y_old,α)
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas,L)
-            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α,L)
+            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas)
+            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α)
             
             #tomando γ = m = 1
 
@@ -51,7 +51,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
             
             y  = y_old + vy*dt
 
-            x, y = periodic_bc(x,y,L)   
+            x, y = reflective_bc(x_old,y_old,x,y,R) 
             
             
                 if i % 100 == 0
@@ -70,7 +70,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
                 if i % 200 == 0
 
                     #actualizar la lista de vecinos cada ciertos pasos
-                    vf,vc = vecinos_pbc(x, y, α,L)
+                    vf,vc = vecinos(x, y, α)
 
                 end
                 
@@ -95,22 +95,20 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
     return
 end
 
-function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
+function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
     
      for i in 1:n_particulas
         for j in vecinos[i]
+
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
-
-                dx -= L * round(dx / L)
-                dy -= L * round(dy / L)
-
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
+               
                 if r <= 2*radio
                     # Potencial de interaccion
-                    magnitud_fuerza = soft_fuerza(r, 75, 2 * radio)
+                    magnitud_fuerza = soft_fuerza(r, 100, 2 * radio)
                     # Calculamos la componente x e y de la fuerza    
                     f_x = -magnitud_fuerza * (dx/r) 
                     f_y = -magnitud_fuerza * (dy/r) 
@@ -167,7 +165,7 @@ function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_a
 end
 
 
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,L,Ro=3)
+function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,Ro=3)
     
     quorum = zeros(n_particulas)
     Nc = ones(n_particulas)
@@ -178,10 +176,6 @@ function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecino
 
                 dx = posicion_x[j] - posicion_x[i]
                 dy = posicion_y[j] - posicion_y[i]
-
-                dx -= L * round(dx / L)
-                dy -= L * round(dy / L)
-
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
                 rij = [dx, dy] / r  
 
@@ -232,7 +226,7 @@ function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
     end
 
     # Create base folder name with parameters
-    param_str = "N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
+    param_str = "Barrera_N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
     
     # Check if folder exists
     contador_sim = 1
@@ -250,7 +244,7 @@ function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
     return nombre_carpeta
 end
 
-function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η, α, Dr, dt)
+function generar_log(folder_path, v, n_pasos, n_particulas, R, angulo1, η, α, Dr, dt)
     # Write parameters to log file
     log_filename = joinpath(folder_path, "log.txt")
     open(log_filename, "w") do file
@@ -261,7 +255,7 @@ function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η, α, 
         println(file, "dt: $dt")
         println(file, "v: $v")
         println(file, "Iteraciones: $n_pasos")
-        println(file, "Tamaño caja: $L")
+        println(file, "Radio Barrera: $R")
         println(file, "Empaquetamiento: $η")
         println(file, "Tamaño cono: $(3*α)")
     end
@@ -316,8 +310,8 @@ function reflective_bc(x_old, y_old, x, y, R)
     return x_final, y_final
 end
 
-function packing_fraction(N, L, r=1)
-    η = (π * N * r^2) / L^2
+function packing_fraction(N, R, r=1)
+    η = (N * r^2) / R^2
     return η
 end
 
