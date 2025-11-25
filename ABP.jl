@@ -105,7 +105,7 @@ function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
                 r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
                 if r <= 2*radio
                     # Potencial de interaccion
-                    magnitud_fuerza = soft_fuerza(r, 125, 2 * radio)
+                    magnitud_fuerza = soft_fuerza(r, 75, 2 * radio)
                     # Calculamos la componente x e y de la fuerza    
                     f_x = -magnitud_fuerza * (dx/r) 
                     f_y = -magnitud_fuerza * (dy/r) 
