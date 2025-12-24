@@ -2,7 +2,7 @@ using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, Pro
 
 
 
-dt = 1e-3  #Paso temporal
+dt = 1e-4  #Paso temporal
 
 
 
@@ -28,14 +28,14 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
         φ_old = rand(0:2pi,n_particulas)
         x_old , y_old = condicion_inicial(n_particulas,radio)
         b_x, b_y = generar_barrera(0,0,radio,radio_b)
-        vf,vc = vecinos(x_old,y_old,α)
+        vf, vc, dx, dy, r2 = vecinos(x_old,y_old,α)
         vb    = vecinos_barrera(x_old,y_old,b_x,b_y)
         @showprogress "Calculando..." for i in 2:n_pasos
 
           
-            f_x, f_y    = correccion_lj(x_old, y_old, vf,radio_p,n_particulas)
+            f_x, f_y    = correccion_lj(vf,dx,dy,r2,radio_p,n_particulas)
             f_bx, f_by  = correccion_barrera(x_old, y_old, b_x, b_y,vb, radio_p,radio_b, n_particulas)
-            quorum, Nc  = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α)
+            quorum, Nc  = quorum_sensing(φ_old,vc,dx,dy,r2,angulo1,α)
             
 
             
@@ -69,7 +69,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Int64, angulo1
                 if i % 200 == 0
 
                     #actualizar la lista de vecinos cada ciertos pasos
-                    vf,vc = vecinos(x,y,α)
+                    vf, vc, dx, dy, r2 = vecinos(x,y,α)
                     vb    = vecinos_barrera(x,y,b_x,b_y)
 
                 end
@@ -120,33 +120,38 @@ function correccion_barrera(pos_x, pos_y, barrera_x, barrera_y,vecinos_b, radio_
         return fx, fy
 end
 
-function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas)
+function correccion_lj(veci_fuerza, dx, dy, r2, radio, n_particulas)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
-    
-     for i in 1:n_particulas
-        for j in vecinos[i]
-                dx = posicion_x[j] - posicion_x[i]
-                dy = posicion_y[j] - posicion_y[i]
-                r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                if r <= 2*radio
-                    # Potencial de interaccion
-                    magnitud_fuerza = soft_fuerza(r, 75, 2 * radio)
-                    # Calculamos la componente x e y de la fuerza    
-                    f_x = -magnitud_fuerza * (dx/r) 
-                    f_y = -magnitud_fuerza * (dy/r) 
-                    # Updateamos el array x e y de las fuerzas
-                    fuerza_x[i] += f_x
-                    fuerza_y[i] += f_y
-                end
+
+    r_cut  = 2 * radio
+    r2_cut = r_cut^2
+
+    for i in 1:n_particulas
+        for j in veci_fuerza[i]
+            rij2 = r2[i, j]
+            if rij2 == 0.0 || rij2 > r2_cut
+                continue
+            end
+
+            rij = sqrt(rij2)
+
+            f = soft_fuerza(rij, 75.0, r_cut)
+
+            invr = 1 / rij
+            fuerza_x[i] -= f * dx[i, j] * invr
+            fuerza_y[i] -= f * dy[i, j] * invr
         end
     end
+
     return fuerza_x, fuerza_y
 end
 
 
-function soft_fuerza(distancia, epsilon, sigma)
-    return epsilon * (1 - (distancia /(sigma)))^(3/2)
+
+function soft_fuerza(r, epsilon, sigma)
+    
+    return epsilon * (1 - r/sigma)^(3/2)
 end
 
 
@@ -189,40 +194,56 @@ function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_a
 end
 
 
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,Ro=3)
-    
-    quorum = zeros(n_particulas)
-    Nc = ones(n_particulas)
-    
-     for i in 1:n_particulas
-        for j in vecinos[i]
-            if i != j
+function quorum_sensing(φ, veci_cono, dx, dy, r2,angulo1, α, Ro=3.0)
+    N = length(φ)
 
-                dx = posicion_x[j] - posicion_x[i]
-                dy = posicion_y[j] - posicion_y[i]
-                r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                rij = [dx, dy] / r  
+    quorum = zeros(N)
+    Nc = zeros(N)   
 
+    cosφ = cos.(φ)
+    sinφ = sin.(φ)
+    cos_cono = cos(angulo1)
 
-                #angulo = atan(rij[2],rij[1])
+    r2_max = (α * Ro)^2
 
-                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(angulo1)) && (r <= α * Ro)
-                    # si las particulas estan dentro del cono de vision y a la distancia indicada
+    for i in 1:N
+        cφ = cosφ[i]
+        sφ = sinφ[i]
 
+        for j in veci_cono[i]
+            rij2 = r2[i, j]
+            if rij2 > r2_max
+                continue
+            end
 
-                    angulo = atan(rij[2],rij[1])
+            rij = sqrt(rij2)
 
-                    quorum[i] += exp(-r/ Ro)*sin(angulo - φ[i])
-                    Nc[i] += exp(-r/ Ro)
-                end
+            dxij = dx[i, j]
+            dyij = dy[i, j]
 
-                
+            invr = 1 / rij
+            rx = dxij * invr
+            ry = dyij * invr
 
+            if rx*cφ + ry*sφ >= cos_cono
+                w = exp(-rij / Ro)
+                ang = atan(ry, rx)
+
+                quorum[i] += w * sin(ang - φ[i])
+                Nc[i]     += w
             end
         end
-    end 
+
+        # Si no hay interaccion se fija a 1 para evitar division por cero
+        if Nc[i] == 0.0
+            Nc[i] = 1.0
+        end
+    end
+
     return quorum, Nc
 end
+
+
 
 function periodic_bc(posicion_x, posicion_y, n_particulas, L)
      for i in 1:n_particulas
@@ -312,31 +333,30 @@ end
 
 
 
-function vecinos(x,y, rq = 2)
+function vecinos(x, y, rq=4.0)
+    skin = 2.0
+    veci_fuerza = Vector{Vector{Int}}()
+    veci_cono   = Vector{Vector{Int}}()
+
+    n = length(x)
+
+    veci_fuerza = Vector{Vector{Int}}(undef, n)
+    veci_cono   = Vector{Vector{Int}}(undef, n)
+
     
-    veci_fuerza = Vector{Int}[]
-    veci_cono = Vector{Int}[]
-    pos = hcat(x,y)
+    dx = x' .- x      # dx[i,j] = x[j] - x[i]
+    dy = y' .- y      # dy[i,j] = y[j] - y[i]
+    r2 = dx.^2 .+ dy.^2
 
+    r_fuerza  = (2 * 2 + skin)^2
+    r_quorum  = (rq * 3 + skin)^2
 
-    r = pairwise(Euclidean(), pos, dims=1)
-
-    r_fuerza = 2*2^(1/6) +1.0
-    r_quorum = rq*3 +1.0
-    for i in 1:size(r,2) 
-
-        v_fuerza = findall(0 .< r[i,:] .<= r_fuerza)
-
-        v_quorum = findall(0 .< r[i,:] .<= r_quorum)
-
-        push!(veci_fuerza, v_fuerza)
-
-        push!(veci_cono, v_quorum)
-
+    for i in 1:n
+        veci_fuerza[i] = findall(j -> 0 < r2[i,j] ≤ r_fuerza, 1:n)
+        veci_cono[i]   = findall(j -> 0 < r2[i,j] ≤ r_quorum, 1:n)
     end
 
-
-    return veci_fuerza, veci_cono
+    return veci_fuerza, veci_cono, dx, dy, r2
 end
 
 
