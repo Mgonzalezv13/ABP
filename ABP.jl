@@ -1,10 +1,10 @@
-using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, ProgressMeter, Random, Distances
+using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, ProgressMeter, Random, Distances, Base.Threads
 
 
 
 dt = 1e-4  #Paso temporal
 
-intervalo = 200
+intervalo = 2000
 
 
 function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Float64, angulo1::Float64,α::Float64,Dr::Float64,radio_p = 1,radio_b = 0.1)
@@ -17,7 +17,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Float64, angul
         generar_log(carpeta, v, n_pasos, n_particulas, radio, angulo1,η,α,Dr,dt)
      # Guardar seed
         #Random.seed!(seed)
-        n_updateds = 0
+        n_updates = 0
         sqrtT = sqrt(2*Dr*dt)
         δ_fuerza = 0.5 * radio_p
         δ_cono   = 0.5 * radio_p
@@ -36,13 +36,12 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Float64, angul
 
         @showprogress "Calculando..." for i in 2:n_pasos
 
-            dx, dy, r2 = distancia(x,y)
 
-            vf, vc = vecinos(dx,dy,r2,α)
+            vf, vc = vecinos(x,y,α)
           
-            f_x, f_y    = correccion_lj(vf,dx,dy,r2,radio_p,n_particulas)
+            f_x, f_y    = correccion_lj(vf,x,y,n_particulas)
             
-            quorum, Nc  = quorum_sensing(φ,vc,dx,dy,r2,angulo1,α)
+            quorum, Nc  = quorum_sensing(φ,vc,x,y,angulo1,α)
             
 
             
@@ -66,15 +65,16 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Float64, angul
                 vx_data[Int64(i/intervalo),:] .= vx
                 vy_data[Int64(i/intervalo),:] .= vy
             end
+
+            dmax2 = chequeo_lista(x, y, x_ref, y_ref)
                 
-            if ( chequeo_lista(x, y, x_ref, y_ref) > δ_fuerza/2 || chequeo_lista(x, y, x_ref, y_ref) > δ_cono/2 )
-           
-               veci_fuerza, veci_cono = vecinos(dx,dy,r2,α)
-           
-               x_ref  .= x
-               y_ref  .= y
-               n_updateds += 1
-           end
+            if dmax2 > δ_fuerza/2*δ_fuerza/2 || dmax2 > δ_cono/2*δ_cono/2
+                veci_fuerza, veci_cono = vecinos(x, y, α)
+            
+                x_ref .= x
+                y_ref .= y
+                n_updates += 1
+            end
            
         
 
@@ -88,40 +88,51 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Float64, angul
         writedlm(joinpath(carpeta, "vx=$(round(v, digits=2)).csv"), vx_data, ',')
         writedlm(joinpath(carpeta, "vy=$(round(v, digits=2)).csv"), vy_data, ',')
         
-    return n_updateds
+    return n_updates
 end
 
 
 
 
-function correccion_lj(veci_fuerza, dx, dy, r2, radio, n_particulas)
+function correccion_lj(veci_fuerza, x, y,n_particulas,radio=1)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
 
     r_cut  = 2^(1/6)*2 * radio
     r2_cut = r_cut^2
 
+    
     for i in 1:n_particulas
+
+        xi, yi = x[i], y[i]
+    
+        fx = 0.0
+        fy = 0.0
+    
         for j in veci_fuerza[i]
-            rij2 = r2[i, j]
-            if rij2 > r2_cut
+            dx = x[j] - xi
+            dy = y[j] - yi
+            r2 = dx*dx + dy*dy
+    
+            if r2 == 0.0 || r2 > r2_cut
                 continue
             end
-
-            rij = sqrt(rij2)
-
+    
+            rij = sqrt(r2)
             f = lj_fuerza(rij, 0.5, 2*radio)
-
-            
-            fuerza_x[i] += f * dx[i, j]
-            fuerza_y[i] += f * dy[i, j] 
+    
+            fx += f * dx
+            fy += f * dy
         end
+    
+        fuerza_x[i] = fx
+        fuerza_y[i] = fy
     end
 
     return fuerza_x, fuerza_y
 end
 
-function correccion_soft(veci_fuerza, dx, dy, r2, radio, n_particulas)
+function correccion_soft(veci_fuerza, x, y, n_particulas, radio= 1.0)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
 
@@ -129,21 +140,25 @@ function correccion_soft(veci_fuerza, dx, dy, r2, radio, n_particulas)
     r2_cut = r_cut^2
 
     for i in 1:n_particulas
+
+        xi, yi = x[i], y[i]
+
         for j in veci_fuerza[i]
+            dx = x[j] - xi
+            dy = y[j] - yi
+            r2 = dx^2 + dy^2
 
-            rij2 = r2[i, j]
-
-            if rij2 == 0.0 || rij2 > r2_cut
+            if r2 == 0.0 || r2 > r2_cut
                 continue
             end
     
-            rij = sqrt(rij2)
+            rij = sqrt(r2)
 
             f = soft_fuerza(rij, 75.0, r_cut)
 
             invr = 1 / rij
-            fuerza_x[i] -= f * dx[i, j] * invr
-            fuerza_y[i] -= f * dy[i, j] * invr
+            fuerza_x[i] -= f * dx * invr
+            fuerza_y[i] -= f * dy * invr
         end
     end    
 
@@ -166,7 +181,7 @@ end
 
 
 
-function quorum_sensing(φ, veci_cono, dx, dy, r2,angulo1, α, Ro=3.0)
+function quorum_sensing(φ, veci_cono, x, y, angulo1, α, Ro=3.0)
     N = length(φ)
 
     quorum = zeros(N)
@@ -176,40 +191,52 @@ function quorum_sensing(φ, veci_cono, dx, dy, r2,angulo1, α, Ro=3.0)
     sinφ = sin.(φ)
     cos_cono = cos(angulo1)
 
-    r2_max = (α * Ro)^2
+    r2_cut = (α * Ro)^2
 
     for i in 1:N
+
         cφ = cosφ[i]
         sφ = sinφ[i]
+        xi, yi = x[i], y[i]
+
+        qi = 0.0
+        Ni = 0.0
 
         for j in veci_cono[i]
-            rij2 = r2[i, j]
-            if rij2 > r2_max
+
+            dx = x[j] - xi
+            dy = y[j] - yi
+            r2 = dx*dx + dy*dy
+
+            if r2 == 0.0 || r2 > r2_cut
                 continue
             end
-
-            rij = sqrt(rij2)
-
-            dxij = dx[i, j]
-            dyij = dy[i, j]
+    
+            rij = sqrt(r2)
+            
 
             invr = 1 / rij
-            rx = dxij * invr
-            ry = dyij * invr
+            rx = dx * invr
+            ry = dy * invr
 
             if rx*cφ + ry*sφ >= cos_cono
                 w = exp(-rij / Ro)
                 ang = atan(ry, rx)
 
-                quorum[i] += w * sin(ang - φ[i])
-                Nc[i]     += w
+                qi += w * sin(ang - φ[i])
+                Ni     += w
             end
         end
 
         # Si no hay interaccion se fija a 1 para evitar division por cero
-        if Nc[i] == 0.0
-            Nc[i] = 1.0
+        if Ni == 0.0
+            Ni = 1.0
         end
+
+        quorum[i] = qi
+        Nc[i]     = Ni
+
+
     end
 
     return quorum, Nc
@@ -240,11 +267,9 @@ function periodic_bc(posicion_x, posicion_y, n_particulas, L)
 end
 
 
-
-
-
 function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr, α)
-    # Convert angle to nice π format if it's a multiple of π
+
+    # ---- Angulo bonito ----
     angle_str = if angulo1 == π
         "π"
     elseif angulo1 == π/2
@@ -256,28 +281,33 @@ function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr, α)
     elseif angulo1 == π/10
         "π_10"
     else
-        "$angulo1"
+        string(angulo1)
     end
 
-    
-    param_str = "Barrera_N=$(n_particulas)-θ=$(angle_str)-Dr=$(Dr)-Ro=$(3*α)"
-    nombre_carpeta = joinpath(base_dir, param_str)
+    Ro = 3α
 
-    
-    contador_sim = 1
-    nombre_carpeta = joinpath(base_dir, param_str)
-    
-    
-    if isdir(nombre_carpeta)
-        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
-            contador_sim += 1
-        end
-        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
+    # ---- Jerarquía de carpetas ----
+    base_N   = joinpath(base_dir, "N=$(n_particulas)")
+    base_ang = joinpath(base_N, "θ=$(angle_str)")
+    base_Dr  = joinpath(base_ang, "Dr=$(Dr)")
+    base_Ro  = joinpath(base_Dr, "Ro=$(Ro)")
+
+    # Crea toda la jerarquía si no existe
+    mkpath(base_Ro)
+
+    # ---- Carpeta de simulación numerada ----
+    sim_id = 1
+    sim_dir = joinpath(base_Ro, "sim_$(lpad(sim_id, 3, '0'))")
+
+    while isdir(sim_dir)
+        sim_id += 1
+        sim_dir = joinpath(base_Ro, "sim_$(lpad(sim_id, 3, '0'))")
     end
 
-    mkdir(nombre_carpeta)
-    return nombre_carpeta
+    mkdir(sim_dir)
+    return sim_dir
 end
+
 
 function generar_log(folder_path, v, n_pasos, n_particulas, R, angulo1, η, α, Dr, dt)
     # Write parameters to log file
@@ -305,27 +335,41 @@ end
 
 
 
-function vecinos(dx::Matrix{Float64}, dy::Matrix{Float64}, r2::Matrix{Float64}, rq=4.0,radio=1.0)
+function vecinos(x::Vector{Float64}, y::Vector{Float64}, rq=4.0, radio=1.0)
     skin = 1.0
-    veci_fuerza = Vector{Vector{Int}}()
-    veci_cono   = Vector{Vector{Int}}()
-
-    n = size(dx,1)
+    n = length(x)
 
     veci_fuerza = Vector{Vector{Int}}(undef, n)
     veci_cono   = Vector{Vector{Int}}(undef, n)
 
-    
-    #dx = x' .- x      # dx[i,j] = x[j] - x[i]
-    #dy = y' .- y      # dy[i,j] = y[j] - y[i]
-    #r2 = dx.^2 .+ dy.^2
-
-    r_fuerza  = (2 * radio + skin)^2
-    r_quorum  = (rq * 1.5* radio + skin)^2
+    r_fuerza = (2 * radio + skin)^2
+    r_quorum = (rq * 1.5 * radio + skin)^2
 
     for i in 1:n
-        veci_fuerza[i] = findall(j -> 0 < r2[i,j] ≤ r_fuerza, 1:n)
-        veci_cono[i]   = findall(j -> 0 < r2[i,j] ≤ r_quorum, 1:n)
+        xi, yi = x[i], y[i]
+
+        vf = Int[]
+        vc = Int[]
+        sizehint!(vf, 32)
+        sizehint!(vc, 64)
+
+        for j in 1:n
+            j == i && continue
+
+            dx = x[j] - xi
+            dy = y[j] - yi
+            r2 = dx*dx + dy*dy
+
+            if r2 ≤ r_fuerza
+                push!(vf, j)
+            end
+            if r2 ≤ r_quorum
+                push!(vc, j)
+            end
+        end
+
+        veci_fuerza[i] = vf
+        veci_cono[i]   = vc
     end
 
     return veci_fuerza, veci_cono
@@ -386,9 +430,8 @@ function ini_circular(n_particulas::Int, Rbox::Float64, α::Float64; radio::Floa
     # --- Pasos de relajacion
     @showprogress "Acomodando las partículas..." for _ in 1:pasos
 
-        dx, dy, r2 = distancia(x,y)
-        veci_fuerza, _ = vecinos(dx,dy,r2,α)
-        Fx, Fy = correccion_soft(veci_fuerza, dx, dy, r2, radio, n_particulas)
+        veci_fuerza, _ = vecinos(x,y,α)
+        Fx, Fy = correccion_soft(veci_fuerza, x, y, n_particulas)
 
         @. x += μ * Fx * dt
         @. y += μ * Fy * dt
@@ -410,7 +453,7 @@ function chequeo_lista(x, y, x_ref, y_ref)
             maxd2 = d2
         end
     end
-    return sqrt(maxd2)
+    return maxd2
 end
 
 
