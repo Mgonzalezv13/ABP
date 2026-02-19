@@ -5,78 +5,73 @@ using  DelimitedFiles, LinearAlgebra, Printf, Dates, Clustering, Statistics, Pro
 dt = 1e-4  #Paso temporal
 
 
+intervalo = 2000
 
-
-function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Float64,α,Dr,radio_p = 1)
+function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Float64, angulo1::Float64,α,Dr,radio_p = 1)
    
      # Carpeta donde se guardara los datos de la simulacion
-        carpeta = carpeta_simulacion("/home/mayron/Datos", angulo1,n_particulas,Dr,α)
+        carpeta = carpeta_simulacion("/home/mayron/Datos", angulo1,n_particulas,Dr,α,L)
         η       = packing_fraction(n_particulas,L)
 
      # Archivo log con los parámetros de la simulacion
         generar_log(carpeta, v, n_pasos, n_particulas, L, angulo1,η,α,Dr,dt)
-    
+
+        n_updates = 0
         sqrtT = sqrt(2*Dr*dt) #esta cantidad se mantiene fija
+        δ_fuerza = 0.5 * radio_p
+        δ_cono   = 0.5 * radio_p
 
-        x_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
-        y_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
-        vx_data  = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
-        vy_data  = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
-        φ_data   = Matrix{Float64}(undef, Int64(n_pasos/100), n_particulas)
+        x_data   = Matrix{Float64}(undef, Int64(n_pasos/intervalo), n_particulas)
+        y_data   = Matrix{Float64}(undef, Int64(n_pasos/intervalo), n_particulas)
+        vx_data  = Matrix{Float64}(undef, Int64(n_pasos/intervalo), n_particulas)
+        vy_data  = Matrix{Float64}(undef, Int64(n_pasos/intervalo), n_particulas)
+        φ_data   = Matrix{Float64}(undef, Int64(n_pasos/intervalo), n_particulas)
 
-        φ_old = rand(0:2pi,n_particulas)
-        x_old , y_old = ini_con_pbc(n_particulas,L)
-        vf,vc = vecinos_pbc(x_old, y_old, α,L)
+        vx, vy = zeros(n_particulas), zeros(n_particulas)
+        x, y, φ = ini_con_pbc(n_particulas,L,α)
+        x_ref, y_ref = copy(x), copy(y)
+        vf,vc = vecinos(x, y, L, α)
+
         @showprogress "Calculando..." for i in 2:n_pasos
 
-          
-            f_x, f_y = correccion_lj(x_old, y_old, vf,radio_p,n_particulas,L)
-            quorum, Nc = quorum_sensing(x_old, y_old, n_particulas,φ_old, angulo1,vc,α,L)
+            f_x, f_y = correccion_soft(vf,x, y,n_particulas,L)
+            quorum, Nc = quorum_sensing(φ,vc,x,y,angulo1,α,L)
             
 
             
             ruidoDr  = sqrtT * randn(n_particulas)
 
-            vx = v*cos.(φ_old)*dt  + f_x*dt
+            @. φ += ruidoDr + 5*(quorum/Nc)*dt
 
-            vy = v*sin.(φ_old)*dt  + f_y*dt
-            
-            φ  = φ_old + ruidoDr + 5*(quorum./Nc)*dt  
-            
-            x  = x_old + vx
-            
-            y  = y_old + vy
+            @. vx = v*cos(φ)*dt + f_x*dt
+            @. vy = v*sin(φ)*dt + f_y*dt
 
-            x, y = periodic_bc(x,y,L)   
+            @. x += vx
+            @. y += vy
+
+            pbc!(x,y,L)
             
             
-                if i % 100 == 0
-                    # Guardar datos cada 100 pasos de tiempo
-                    x_data[Int64(i/100),:]  .= x 
-                    y_data[Int64(i/100),:]  .= y
-                    φ_data[Int64(i/100),:]  .= φ
-                    vx_data[Int64(i/100),:] .= vx
-                    vy_data[Int64(i/100),:] .= vy
+                if i % intervalo == 0
+                    
+                    x_data[Int64(i/intervalo),:]  .= x 
+                    y_data[Int64(i/intervalo),:]  .= y
+                    φ_data[Int64(i/intervalo),:]  .= φ
+                    vx_data[Int64(i/intervalo),:] .= vx
+                    vy_data[Int64(i/intervalo),:] .= vy
                 end
 
-
-
-               
+                dmax2 = chequeo_lista(x, y, x_ref, y_ref,L)
                 
-                if i % 200 == 0
-
-                    #actualizar la lista de vecinos cada ciertos pasos
-                    vf,vc = vecinos_pbc(x, y, α,L)
-
+                if dmax2 > δ_fuerza/2*δ_fuerza/2 || dmax2 > δ_cono/2*δ_cono/2
+                    vf, vc = vecinos(x, y, α)
+                
+                    x_ref .= x
+                    y_ref .= y
+                    n_updates += 1
                 end
                 
-        
- 
 
-
-                φ_old = φ
-                x_old = x
-                y_old = y 
 
             end  
         # Guardar las posiciones en los archivos
@@ -86,134 +81,258 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, L::Int64, angulo1::Fl
         writedlm(joinpath(carpeta, "vx=$(round(v, digits=2)).csv"), vx_data, ',')
         writedlm(joinpath(carpeta, "vy=$(round(v, digits=2)).csv"), vy_data, ',')
 
-    return
+    return n_updates
 end
 
-
-function correccion_lj(posicion_x, posicion_y,vecinos, radio,n_particulas,L)
+function correccion_lj(veci_fuerza, x, y,n_particulas,L,radio=1)
     fuerza_x = zeros(n_particulas)
     fuerza_y = zeros(n_particulas)
+
+    r_cut  = 2^(1/6)*2 * radio
+    r2_cut = r_cut^2
+
     
-     for i in 1:n_particulas
-        for j in vecinos[i]
-                dx = posicion_x[j] - posicion_x[i]
-                dy = posicion_y[j] - posicion_y[i]
+    for i in 1:n_particulas
 
-                dx -= L * round(dx / L)
-                dy -= L * round(dy / L)
-
-                r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                if r <= (2^(1/6))*2*radio
-                    # Potencial de interaccion
-                    magnitud_fuerza = lj_fuerza(r, 0.5, 2 * radio)
-                    # Calculamos la componente x e y de la fuerza    
-                    f_x = -magnitud_fuerza * (dx/r) 
-                    f_y = -magnitud_fuerza * (dy/r) 
-                    # Updateamos el array x e y de las fuerzas
-                    fuerza_x[i] += f_x
-                    fuerza_y[i] += f_y
-                end
+        xi, yi = x[i], y[i]
+    
+        fx = 0.0
+        fy = 0.0
+    
+        for j in veci_fuerza[i]
+            dx = x[j] - xi
+            dy = y[j] - yi
+            dx -= L * round(dx / L)
+            dy -= L * round(dy / L)
+            r2 = dx*dx + dy*dy
+    
+            if r2 == 0.0 || r2 > r2_cut
+                continue
+            end
+    
+            rij = sqrt(r2)
+            f = lj_fuerza(rij, 0.5, 2*radio)
+    
+            fx += f * dx
+            fy += f * dy
         end
+    
+        fuerza_x[i] = fx
+        fuerza_y[i] = fy
     end
+
     return fuerza_x, fuerza_y
 end
 
+function correccion_soft(veci_fuerza, x, y, n_particulas, L, radio= 1.0)
+    fuerza_x = zeros(n_particulas)
+    fuerza_y = zeros(n_particulas)
+
+    r_cut  = 2 * radio
+    r2_cut = r_cut^2
+
+    for i in 1:n_particulas
+
+        xi, yi = x[i], y[i]
+
+        for j in veci_fuerza[i]
+            dx = x[j] - xi
+            dy = y[j] - yi
+            dx -= L * round(dx / L)
+            dy -= L * round(dy / L)
+
+            r2 = dx*dx + dy*dy
+
+            if r2 == 0.0 || r2 > r2_cut
+                continue
+            end
+    
+            rij = sqrt(r2)
+
+            f = soft_fuerza(rij, 75.0, r_cut)
+
+            invr = 1 / rij
+            fuerza_x[i] -= f * dx * invr
+            fuerza_y[i] -= f * dy * invr
+        end
+    end    
+
+    return fuerza_x, fuerza_y
+end
+
+function soft_fuerza(r, epsilon, sigma)
+    
+    return epsilon * (1 - r/sigma)^(3/2)
+end
+
 function lj_fuerza(distancia, epsilon, sigma)
-        # Calculate the potential energy
-        force = 24 * epsilon * (( -(sigma^6) / (distancia^7) ) +2 * ((sigma^12) / (distancia^13)) )
-        return force
+    # Calculate the potential energy
+    force = 24 * epsilon * ((sigma^6) / (distancia^8) - 2 * (sigma^12) / (distancia^14))
+    return force
 end
 
 
-function condicion_inicial(n_particulas,radio_circulo,radio_particula = 1, max_attempts = 100)
-    x_ini = Float64[]  # Array to store x-coordinates
-    y_ini = Float64[]  # Array to store y-coordinates
+function quorum_sensing(φ, veci_cono, x, y, angulo1, α,L, Ro=3.0)
+    N = length(φ)
 
+    quorum = zeros(N)
+    Nc = zeros(N)   
 
+    cosφ = cos.(φ)
+    sinφ = sin.(φ)
+    cos_cono = cos(angulo1)
 
-    for _ in 1:n_particulas
-        while true
+    r2_cut = (α * Ro)^2
 
-            # Generar condiciones iniciales en coordenadas polares
-            angulo = rand() * 2 * π
-            r = rand(0:(radio_circulo - radio_particula)) 
+    for i in 1:N
 
-            # Convertir a coordenadas cartesianas
-            x = r * cos(angulo)
-            y = r * sin(angulo)
+        cφ = cosφ[i]
+        sφ = sinφ[i]
+        xi, yi = x[i], y[i]
 
-            # Chequear si la posición de la i-ésima partícula no se solapa con otra
-            overlap = false
-            for i in 1:length(x_ini)
-                if sqrt((x - x_ini[i])^2 + (y - y_ini[i])^2) < 2 * radio_particula
-                    overlap = true
-                    break
-                end
+        qi = 0.0
+        Ni = 0.0
+
+        for j in veci_cono[i]
+
+            dx = x[j] - xi
+            dy = y[j] - yi
+            dx -= L * round(dx / L)
+            dy -= L * round(dy / L)
+
+            r2 = dx*dx + dy*dy
+
+            if r2 == 0.0 || r2 > r2_cut
+                continue
             end
+    
+            rij = sqrt(r2)
+            
 
-            # Si no hay overlap, entonces guarda la posición en x e y
-            if !overlap
-                push!(x_ini, x)
-                push!(y_ini, y)
-                break
+            invr = 1 / rij
+            rx = dx * invr
+            ry = dy * invr
+
+            if rx*cφ + ry*sφ >= cos_cono
+                w = exp(-rij / Ro)
+                ang = atan(ry, rx)
+
+                qi += w * sin(ang - φ[i])
+                Ni     += w
             end
         end
+
+        # Si no hay interaccion se fija a 1 para evitar division por cero
+        if Ni == 0.0
+            Ni = 1.0
+        end
+
+        quorum[i] = qi
+        Nc[i]     = Ni
+
+
     end
 
-    return x_ini, y_ini
-end
-
-
-function quorum_sensing(posicion_x, posicion_y, n_particulas, φ, angulo1,vecinos,α,L,Ro=3)
-    
-    quorum = zeros(n_particulas)
-    Nc = ones(n_particulas)
-    
-     for i in 1:n_particulas
-        for j in vecinos[i]
-            if i != j
-
-                dx = posicion_x[j] - posicion_x[i]
-                dy = posicion_y[j] - posicion_y[i]
-
-                dx -= L * round(dx / L)
-                dy -= L * round(dy / L)
-
-                r = sqrt(dx^2 + dy^2)  # Distancia entre la i-esima y j-esima particula
-                rij = [dx, dy] / r  
-
-
-                #angulo = atan(rij[2],rij[1])
-
-                if (dot(rij, [cos(φ[i]), sin(φ[i])]) >= cos(angulo1)) && (r <= α * Ro)
-                    # si las particulas estan dentro del cono de vision y a la distancia indicada
-
-
-                    angulo = atan(rij[2],rij[1])
-
-                    quorum[i] += exp(-r/ Ro)*sin(angulo - φ[i])
-                    Nc[i] += exp(-r/ Ro)
-                end
-
-                
-
-            end
-        end
-    end 
     return quorum, Nc
 end
 
-function periodic_bc(posicion_x, posicion_y, L)
-    posicion_x = mod.(posicion_x .+ L/2, L) .- L/2
-    posicion_y = mod.(posicion_y .+ L/2, L) .- L/2
-    return posicion_x, posicion_y
+
+function vecinos(x::Vector{Float64}, y::Vector{Float64}, L , rq=4.0, radio=1.0)
+    skin = 1.0
+    n = length(x)
+
+    veci_fuerza = Vector{Vector{Int}}(undef, n)
+    veci_cono   = Vector{Vector{Int}}(undef, n)
+
+    r_fuerza = (2 * radio + skin)^2
+    r_quorum = (rq * 1.5 * radio + skin)^2
+
+    for i in 1:n
+        xi, yi = x[i], y[i]
+
+        vf = Int[]
+        vc = Int[]
+        sizehint!(vf, 32)
+        sizehint!(vc, 64)
+
+        for j in 1:n
+            j == i && continue
+
+            dx = x[j] - xi
+            dy = y[j] - yi
+            dx -= L * round(dx / L)
+            dy -= L * round(dy / L)
+            r2 = dx*dx + dy*dy
+
+            if r2 ≤ r_fuerza
+                push!(vf, j)
+            end
+            if r2 ≤ r_quorum
+                push!(vc, j)
+            end
+        end
+
+        veci_fuerza[i] = vf
+        veci_cono[i]   = vc
+    end
+
+    return veci_fuerza, veci_cono
+end
+
+function ini_con_pbc(n_particulas::Int,L::Float64,α::Float64;radio::Float64 = 1.0,dt::Float64 = 0.001,pasos::Int = 6000,μ::Float64 = 1.0)
+
+    # --- Posiciones aleatorias en la caja
+    x = L * (rand(n_particulas) .- 0.5)
+    y = L * (rand(n_particulas) .- 0.5)
+
+    # --- Orientaciones aleatorias
+    φ = 2π * rand(n_particulas)
+
+    # Asegurar PBC inicial
+    pbc!(x, y, L)
+
+    # --- Relajación
+    @showprogress "Acomodando las partículas..." for _ in 1:pasos
+
+        veci_fuerza, _ = vecinos(x, y, L,α)   # ← debe usar MIC
+        Fx, Fy = correccion_soft(veci_fuerza, x, y, n_particulas,L)
+
+        @. x += μ * Fx * dt
+        @. y += μ * Fy * dt
+
+        pbc!(x, y, L)
+    end
+
+    return x, y, φ
+end
+
+
+function pbc!(x, y, L)
+    @. x = mod(x + L/2, L) - L/2
+    @. y = mod(y + L/2, L) - L/2
+    return nothing
+end
+
+function chequeo_lista(x, y, x_ref, y_ref,L)
+    maxd2 = 0.0
+    @inbounds for i in eachindex(x)
+        dx = x[i] - x_ref[i]
+        dy = y[i] - y_ref[i]
+        dx -= L * round(dx / L)
+        dy -= L * round(dy / L)
+        d2 = dx*dx + dy*dy
+        if d2 > maxd2
+            maxd2 = d2
+        end
+    end
+    return maxd2
 end
 
 
 
+function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr, α,L)
 
-function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
-    # Convert angle to nice π format if it's a multiple of π
+    # ---- Angulo bonito ----
     angle_str = if angulo1 == π
         "π"
     elseif angulo1 == π/2
@@ -225,26 +344,32 @@ function carpeta_simulacion(base_dir, angulo1, n_particulas, Dr,α)
     elseif angulo1 == π/10
         "π_10"
     else
-        "$angulo1"
+        string(angulo1)
     end
 
-    # Create base folder name with parameters
-    param_str = "N=$(n_particulas)-Dr=$(Dr)-θ=$(angle_str)-Ro=$(3*α)"
-    
-    # Check if folder exists
-    contador_sim = 1
-    nombre_carpeta = joinpath(base_dir, param_str)
-    
-    # If exists, add repeticion counter
-    if isdir(nombre_carpeta)
-        while isdir(joinpath(base_dir, "$param_str-repeticion_$contador_sim"))
-            contador_sim += 1
-        end
-        nombre_carpeta = joinpath(base_dir, "$param_str-repeticion_$contador_sim")
+    Ro = 3α
+
+    # ---- Jerarquía de carpetas ----
+    base_N   = joinpath(base_dir, "PBC_N=$(n_particulas)")
+    base_L   = joinpath(base_N, "Tamaño_Caja=$(L)")
+    base_ang = joinpath(base_L, "θ=$(angle_str)")
+    base_Dr  = joinpath(base_ang, "Dr=$(Dr)")
+    base_Ro  = joinpath(base_Dr, "Ro=$(Ro)")
+
+    # Crea toda la jerarquía si no existe
+    mkpath(base_Ro)
+
+    # ---- Carpeta de simulación numerada ----
+    sim_id = 1
+    sim_dir = joinpath(base_Ro, "sim_$(lpad(sim_id, 3, '0'))")
+
+    while isdir(sim_dir)
+        sim_id += 1
+        sim_dir = joinpath(base_Ro, "sim_$(lpad(sim_id, 3, '0'))")
     end
-    
-    mkdir(nombre_carpeta)
-    return nombre_carpeta
+
+    mkdir(sim_dir)
+    return sim_dir
 end
 
 function generar_log(folder_path, v, n_pasos, n_particulas, L, angulo1, η, α, Dr, dt)
@@ -266,160 +391,7 @@ end
 
 
 
-
-
-
-function reflective_bc(x_old, y_old, x, y, R)
-    N = length(x_old)
-    r = @. sqrt(x^2 + y^2)          # Distance from origin
-    outside_mask = r .>= R           # Mask for particles outside the circle
-    outside_indices = findall(outside_mask)
-
-    # Preallocate intersection points
-    p_x = zeros(N)
-    p_y = zeros(N)
-
-    # Compute intersection points for particles outside
-    for i in outside_indices
-        m = (y[i] - y_old[i]) / (x[i] - x_old[i])  # Slope of trajectory line
-        h = y_old[i] - m * x_old[i]                # y-intercept
-        mm = m^2
-        delta = sqrt(R^2 * (1 + mm) - h^2)          # Discriminant
-        raiz1_x = (-m * h + delta) / (1 + mm)       # First intersection (x)
-        raiz1_y = m * raiz1_x + h                   # First intersection (y)
-        raiz2_x = (-m * h - delta) / (1 + mm)       # Second intersection (x)
-        raiz2_y = m * raiz2_x + h                   # Second intersection (y)
-
-        # Choose the correct intersection (between old and new positions)
-        if (x_old[i] < raiz1_x < x[i]) || (y_old[i] < raiz1_y < y[i]) ||
-           (x[i] < raiz1_x < x_old[i]) || (y[i] < raiz1_y < y_old[i])
-            p_x[i], p_y[i] = raiz1_x, raiz1_y
-        else
-            p_x[i], p_y[i] = raiz2_x, raiz2_y
-        end
-    end
-
-    # Compute normal vectors and reflections
-    n_x = @. (-1 / R) * p_x * outside_mask  # Normal vector (inward)
-    n_y = @. (-1 / R) * p_y * outside_mask
-    factor = @. (x - p_x) * n_x + (y - p_y) * n_y  # Dot product
-    x_reflected = @. (x - 2 * n_x * factor) * outside_mask
-    y_reflected = @. (y - 2 * n_y * factor) * outside_mask
-
-    # Combine results: keep particles inside, reflect those outside
-    x_final = @. x * (r < R) + x_reflected
-    y_final = @. y * (r < R) + y_reflected
-
-    return x_final, y_final
-end
-
 function packing_fraction(N, L, r=1)
     η = (π * N * r^2) / L^2
     return η
 end
-
-
-
-
-function vecinos(x,y, rq = 2)
-    
-    veci_fuerza = Vector{Int}[]
-    veci_cono = Vector{Int}[]
-    pos = hcat(x,y)
-
-
-    r = pairwise(Euclidean(), pos, dims=1)
-
-    r_fuerza = 2*2^(1/6) +1.0
-    r_quorum = rq*3 +1.0
-
-    for i in 1:size(r,2) 
-
-        v_fuerza = findall(0 .< r[i,:] .<= r_fuerza)
-
-        v_quorum = findall(0 .< r[i,:] .<= r_quorum)
-
-        push!(veci_fuerza, v_fuerza)
-
-        push!(veci_cono, v_quorum)
-
-    end
-
-
-    return veci_fuerza, veci_cono
-end
-
-
-function vecinos_pbc(x, y, rq,L)
-    N = length(x)
-    inv_L = 1.0 / L
-
-    veci_fuerza = Vector{Int}[]
-    veci_cono = Vector{Int}[]
-
-    r_fuerza = 2*2^(1/6) +1.0
-    r_quorum = rq*3 +1.0
-   
-    x1 = x .- x'
-    y1 = y .- y'
-
-    dx = x1 .- L .* round.(x1 .* inv_L)
-    dy = y1 .- L .* round.(y1 .* inv_L)
-    
-    r_min = sqrt.(dx.^2 + dy.^2)
-
-    
-    for i in 1:size(r_min,2) 
-
-        v_fuerza = findall(0 .< r_min[i,:] .<= r_fuerza)
-
-        v_quorum = findall(0 .< r_min[i,:] .<= r_quorum)
-
-        push!(veci_fuerza, v_fuerza)
-
-        push!(veci_cono, v_quorum)
-
-    end
-    
-    return veci_fuerza, veci_cono
-end
-
-function ini_con_pbc(N, L, radio_particula=1)
-    x_ini = Float64[]
-    y_ini = Float64[]
-    min_dist = 2 * radio_particula
-
-    for _ in 1:N
-        attempts = 0
-        while true
-            attempts += 1
-
-            # Continuous random positions instead of grid
-            x = rand() * L - L/2  # Random position in [-L/2, L/2]
-            y = rand() * L - L/2
-
-            # Check overlaps with PBC
-            overlap = false
-            for i in 1:length(x_ini)
-                dx = abs(x - x_ini[i])
-                dy = abs(y - y_ini[i])
-                # Apply periodic boundary conditions
-                dx = min(dx, L - dx)
-                dy = min(dy, L - dy)
-                
-                if sqrt(dx^2 + dy^2) < min_dist
-                    overlap = true
-                    break
-                end
-            end
-
-            if !overlap
-                push!(x_ini, x)
-                push!(y_ini, y)
-                break
-            end
-        end
-    end
-    return x_ini, y_ini
-end
-
