@@ -32,12 +32,10 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Float64, angul
         
         x,y,φ = ini_circular(n_particulas,radio,α)
         x_ref, y_ref = copy(x), copy(y)
-
+        vf, vc = vecinos(x,y,α)
 
         @showprogress "Calculando..." for i in 2:n_pasos
 
-
-            vf, vc = vecinos(x,y,α)
           
             f_x, f_y    = correccion_lj(vf,x,y,n_particulas)
             
@@ -69,7 +67,7 @@ function vc(v::Int64, n_pasos::Int64, n_particulas::Int64, radio::Float64, angul
             dmax2 = chequeo_lista(x, y, x_ref, y_ref)
                 
             if dmax2 > δ_fuerza/2*δ_fuerza/2 || dmax2 > δ_cono/2*δ_cono/2
-                veci_fuerza, veci_cono = vecinos(x, y, α)
+                vf, vc = vecinos(x, y, α)
             
                 x_ref .= x
                 y_ref .= y
@@ -102,7 +100,7 @@ function correccion_lj(veci_fuerza, x, y,n_particulas,radio=1)
     r2_cut = r_cut^2
 
     
-    for i in 1:n_particulas
+    Threads.@threads for i in 1:n_particulas
 
         xi, yi = x[i], y[i]
     
@@ -139,7 +137,7 @@ function correccion_soft(veci_fuerza, x, y, n_particulas, radio= 1.0)
     r_cut  = 2 * radio
     r2_cut = r_cut^2
 
-    for i in 1:n_particulas
+    Threads.@threads for i in 1:n_particulas
 
         xi, yi = x[i], y[i]
 
@@ -193,7 +191,7 @@ function quorum_sensing(φ, veci_cono, x, y, angulo1, α, Ro=3.0)
 
     r2_cut = (α * Ro)^2
 
-    for i in 1:N
+    Threads.@threads for i in 1:N
 
         cφ = cosφ[i]
         sφ = sinφ[i]
@@ -398,7 +396,7 @@ function barrera_circular!(x, y, Rbox, a)
     Rmax2 = Rmax^2
     N = length(x)
 
-    @inbounds for i in 1:N
+    Threads.@threads for i in 1:N
         r2 = x[i]^2 + y[i]^2
         if r2 > Rmax2
             scale = Rmax / sqrt(r2)
@@ -444,16 +442,24 @@ end
 
 
 function chequeo_lista(x, y, x_ref, y_ref)
-    maxd2 = 0.0
-    @inbounds for i in eachindex(x)
+
+    nt = Threads.nthreads()
+    max_local = zeros(nt)
+
+    Threads.@threads for i in eachindex(x)
+
+        tid = Threads.threadid()
+
         dx = x[i] - x_ref[i]
         dy = y[i] - y_ref[i]
         d2 = dx*dx + dy*dy
-        if d2 > maxd2
-            maxd2 = d2
+
+        if d2 > max_local[tid]
+            max_local[tid] = d2
         end
     end
-    return maxd2
+
+    return maximum(max_local)
 end
 
 
